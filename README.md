@@ -67,12 +67,15 @@ accent borders, and offset shadows.
 
 Edit `~/.config/wixels/desktop.toml` (override the path with `WIXELS_CONFIG`). Each
 `[[widget]]` block enables a widget by `kind`; delete a block to disable it. Placement
-fields are optional — omit them to use the widget's built-in default. Config is read
-once at launch.
+fields are optional — omit them to use the widget's built-in default. The file is watched:
+save an edit and wixels reloads it live — adding, removing, re-placing, re-theming, or
+re-optioning widgets without a restart, including `[paths]`. (Live menu-bar toggles and
+in-progress layout edits reset on reload, the same as on relaunch.)
 
-One exception writes the file back: dragging a widget in the menu-bar layout editor and
-saving persists its new `offset` by regenerating `desktop.toml`. Every widget block,
-option, and unknown field is retained, but comments and hand-formatting are dropped.
+wixels also writes the file back in one case: dragging a widget in the menu-bar layout
+editor and saving persists its new `offset` by regenerating `desktop.toml`. Every widget
+block, option, and unknown field is retained, but comments and hand-formatting are dropped
+(this self-write does not trigger a reload).
 
 ```toml
 [theme]

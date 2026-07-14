@@ -87,6 +87,14 @@ public final class PaletteStore: ObservableObject, @unchecked Sendable {
         source = src
     }
 
+    /// Tear down the file/directory watchers. Called when the owning host is replaced
+    /// (live config reload) so the retired store's DispatchSource is released
+    /// deterministically instead of lingering until dealloc.
+    public func stop() {
+        source?.cancel(); source = nil
+        directorySource?.cancel(); directorySource = nil
+    }
+
     /// If pywal has never run, watch for colors.json to be created without polling.
     private func watchParentDirectory() {
         let desired = (file as NSString).deletingLastPathComponent

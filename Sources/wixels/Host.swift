@@ -344,6 +344,25 @@ final class WidgetHost {
         print("wixels up — \(mounts.count) widget(s). Try `wal -R` to recolour. Ctrl-C to quit.")
     }
 
+    /// Tear the whole host down for a live config reload: exit edit mode, stop scheduling,
+    /// drop observers, close every window, and release the palette watcher. Symmetric to
+    /// `run()`. The host is discarded afterwards — a fresh one is built from the new config.
+    func shutdown() {
+        if editing { endEditMode(save: false) }
+        scheduler.stop()
+        if let o = occlusionObserver {
+            NotificationCenter.default.removeObserver(o); occlusionObserver = nil
+        }
+        paletteObserver?.cancel(); paletteObserver = nil
+        palette.stop()
+        for i in mounts.indices {
+            mounts[i].window?.orderOut(nil)
+            mounts[i].window?.close()
+            mounts[i].window = nil
+        }
+        mounts.removeAll()
+    }
+
     /// idleStatic widgets sample once at launch and then only on a palette change
     /// (the battery rule: no polling). Re-tick them when wal recolours so any that
     /// derive data from the theme, or want a fresh reading on theme switch, refresh.
@@ -414,6 +433,9 @@ final class WidgetHost {
         w.isOpaque = false
         w.backgroundColor = .clear
         w.hasShadow = false
+        // Live reload closes these windows explicitly; keep ARC in charge of dealloc so
+        // close() doesn't over-release (NSWindow's default release-when-closed + ARC).
+        w.isReleasedWhenClosed = false
         w.ignoresMouseEvents = !m.interactive             // click-through unless interactive
         // .desktopWindow sits BELOW where WindowServer routes clicks (Finder eats
         // them), so an interactive widget there never sees a mouse event. Desktop

@@ -17,25 +17,41 @@ import WixelsKit
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    // The spec table is built once from plugin dylibs — reloads reuse it (dylibs are
+    // dlopen'd at launch; they aren't re-scanned).
+    private let registrar = Registrar()
     private var host: WidgetHost!
     private var statusBar: StatusBarController!
+    private var watcher: ConfigWatcher?
 
     func applicationDidFinishLaunching(_ note: Notification) {
-        // Read the TOML layout (scaffolds a default on first run). Its `[paths]` feed
-        // the shared samplers + palette store; env vars still override (see Config).
         Config.writeDefaultIfMissing()
-        let cfg = Config.load()
-
-        let services = Services(nowplayingPath: cfg.nowplaying)   // shared samplers (cpu, music)
-        let host = WidgetHost(palette: PaletteStore(colorsPath: cfg.colors))
-
-        // Build the spec table entirely from plugin dylibs — every widget is a
-        // libWidget*.dylib the loader dlopens and registers (no static built-ins).
-        let registrar = Registrar()
         PluginLoader.load(into: registrar)
 
-        // Mount each enabled entry in file order (order sets z-stacking among
-        // same-level widgets — frog before clock).
+        buildSession()
+        self.statusBar = StatusBarController(host: host)
+        // Watch the layout file and rebuild live when it changes (WIXELS_CONFIG honoured).
+        self.watcher = ConfigWatcher(path: Config.path) { [weak self] in self?.reload() }
+    }
+
+    /// Construct a host from the current config and mount every widget. Reads `[paths]`
+    /// afresh so a config edit to colors/nowplaying takes effect on reload. Called at
+    /// launch and again on every reload.
+    private func buildSession() {
+        // Read the TOML layout. Its `[paths]` feed the shared samplers + palette store;
+        // env vars still override (see Config).
+        let cfg = Config.load()
+        let services = Services(nowplayingPath: cfg.nowplaying)   // shared samplers (cpu, music)
+        let host = WidgetHost(
+            palette: PaletteStore(colorsPath: cfg.colors),
+            // Suppress the file event our own drag-save write would otherwise raise.
+            placementWriter: { [weak self] changes in
+                self?.watcher?.ignoringWrites { Config.writePlacements(changes) }
+            }
+        )
+
+        // Mount each entry in file order (order sets z-stacking among same-level
+        // widgets — frog before clock).
         for entry in cfg.entries {
             if let spec = registrar.specs[entry.kind] {
                 let placement = entry.placement.apply(to: spec.defaultPlacement)
@@ -54,9 +70,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         host.run()
         self.host = host
+    }
 
-        // Menu bar presence: shows the app is up and toggles widgets at runtime.
-        self.statusBar = StatusBarController(host: host)
+    /// Config file changed on disk: tear the running host down and rebuild it. Skipped
+    /// while the user is dragging widgets in layout-edit mode (exiting edit writes the
+    /// config itself, which is self-suppressed).
+    private func reload() {
+        guard let host else { return }
+        guard !host.editing else {
+            Log.note("config changed during layout edit — ignoring")
+            return
+        }
+        Log.note("config changed — reloading")
+        host.shutdown()
+        buildSession()
+        statusBar.rebind(host: self.host)
     }
 }
 
