@@ -35,8 +35,7 @@ public final class Registrar: @unchecked Sendable {
 
     public func add(_ spec: WidgetSpec) {
         if specs[spec.kind] != nil {
-            FileHandle.standardError.write(
-                Data("wixels: duplicate widget kind '\(spec.kind)' — keeping the first\n".utf8))
+            Log.note("duplicate widget kind '\(spec.kind)' — keeping the first")
             return
         }
         specs[spec.kind] = spec

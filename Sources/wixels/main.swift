@@ -37,7 +37,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // same-level widgets — frog before clock).
         for entry in cfg.entries {
             guard let spec = registrar.specs[entry.kind] else {
-                FileHandle.standardError.write(Data("wixels: no widget for kind '\(entry.kind)'\n".utf8))
+                Log.note("no widget for kind '\(entry.kind)'")
                 continue
             }
             let placement = entry.placement.apply(to: spec.defaultPlacement)

@@ -15,6 +15,14 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 cd "$ROOT"
 
+# Keep .build a symlink to ./build so plain `swift build` and this script share the
+# one visible scratch tree. A fresh clone (or a stray plain build) leaves a real
+# .build dir; that drift is what clobbers the module cache — see the host note below.
+if [ ! -L .build ]; then
+    if [ -e .build ]; then rm -rf .build; fi
+    ln -s build .build
+fi
+
 if [ "${1:-}" = "clean" ]; then
     if [ -d build ]; then
         echo "==> removing ./build ($(du -sh build | cut -f1))"
@@ -27,7 +35,10 @@ fi
 CONFIG="${1:-debug}"
 
 echo "==> building host (wixels) [$CONFIG]"
-swift build -c "$CONFIG" --scratch-path build
+# Host uses the default scratch dir (.build, a symlink to ./build) so plain
+# `swift build` and this script share ONE literal path — mixing `.build` and
+# `build` for the same dir clobbers the module cache (corrupt Foundation PCM).
+swift build -c "$CONFIG"
 DEST="$ROOT/build/$CONFIG"
 
 for dir in plugins/*/; do

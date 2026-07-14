@@ -4,6 +4,7 @@
 // is how you rearrange wixels without recompiling.
 
 import Foundation
+import WixelsKit
 
 extension Config {
     /// Scaffold the config file on first run so there's something to edit.
@@ -12,7 +13,7 @@ extension Config {
         let dir = (path as NSString).deletingLastPathComponent
         try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
         if (try? defaultTOML.write(toFile: path, atomically: true, encoding: .utf8)) != nil {
-            FileHandle.standardError.write(Data("wixels: wrote default config to \(path)\n".utf8))
+            Log.note("wrote default config to \(path)")
         }
     }
 

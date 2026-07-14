@@ -22,9 +22,8 @@ struct QuoteSource: Sendable {
     /// `configPath` is the widget's `[widget.options] path`. Precedence: WIXELS_QUOTES
     /// env > that config path > the built-in default location.
     init(path configPath: String? = nil) {
-        let path = ProcessInfo.processInfo.environment["WIXELS_QUOTES"]
-            ?? configPath.map { ($0 as NSString).expandingTildeInPath }
-            ?? ("~/.config/wixels/quotes.json" as NSString).expandingTildeInPath
+        let path = Paths.resolve(env: "WIXELS_QUOTES", config: configPath,
+                                 default: "~/.config/wixels/quotes.json")
         if let data = FileManager.default.contents(atPath: path),
            let list = try? JSONSerialization.jsonObject(with: data) as? [String], !list.isEmpty {
             quotes = list

@@ -27,9 +27,10 @@ struct ConfigEntry {
     let options: Options
 }
 
-/// The whole parsed config: the widget list plus the app-global `[paths]` (already
-/// tilde-expanded; nil = use the built-in default). Per-widget files (quotes,
-/// disk-snail volume) live in each widget's `[widget.options]`, not here.
+/// The whole parsed config: the widget list plus the app-global `[paths]` (raw as
+/// written — `Paths.resolve` tilde-expands them; nil = use the built-in default).
+/// Per-widget files (quotes, disk-snail volume) live in each widget's
+/// `[widget.options]`, not here.
 struct LoadedConfig {
     var entries: [ConfigEntry] = []
     var colors: String?          // wal palette file (PaletteStore)
@@ -55,20 +56,20 @@ struct PlacementOverride {
 
 enum Config {
     static var path: String {
-        ProcessInfo.processInfo.environment["WIXELS_CONFIG"]
-            ?? ("~/.config/wixels/desktop.toml" as NSString).expandingTildeInPath
+        Paths.resolve(env: "WIXELS_CONFIG", config: nil,
+                      default: "~/.config/wixels/desktop.toml")
     }
 
     /// Load the config file, falling back to the bundled default when it's missing
     /// or unparseable (logged, never fatal).
     static func load() -> LoadedConfig {
         guard let text = try? String(contentsOfFile: path, encoding: .utf8) else {
-            warn("no config at \(path) — using built-in default layout")
+            Log.note("no config at \(path) — using built-in default layout")
             return (try? parse(defaultTOML)) ?? LoadedConfig()
         }
         do { return try parse(text) }
         catch {
-            warn("config parse error (\(error)) — using built-in default layout")
+            Log.note("config parse error (\(error)) — using built-in default layout")
             return (try? parse(defaultTOML)) ?? LoadedConfig()
         }
     }
@@ -81,12 +82,8 @@ enum Config {
             return ConfigEntry(kind: kind, placement: placement(from: t), options: options(from: t))
         } ?? []
         return LoadedConfig(entries: entries,
-                            colors: paths?["colors"]?.string.map(expandTilde),
-                            nowplaying: paths?["nowplaying"]?.string.map(expandTilde))
-    }
-
-    private static func expandTilde(_ s: String) -> String {
-        (s as NSString).expandingTildeInPath
+                            colors: paths?["colors"]?.string,
+                            nowplaying: paths?["nowplaying"]?.string)
     }
 
     private static func placement(from t: TOMLTable) -> PlacementOverride {
@@ -125,22 +122,16 @@ enum Config {
         CGFloat(v.double ?? Double(v.int ?? 0))
     }
 
-    private static func alignment(_ s: String) -> Alignment? {
-        switch s {
-        case "leading":        return .leading
-        case "trailing":       return .trailing
-        case "center":         return .center
-        case "top":            return .top
-        case "bottom":         return .bottom
-        case "topLeading":     return .topLeading
-        case "topTrailing":    return .topTrailing
-        case "bottomLeading":  return .bottomLeading
-        case "bottomTrailing": return .bottomTrailing
-        default:               return nil
-        }
-    }
+    /// The TOML `align` strings, mapped like `Anchor(rawValue:)` does for anchors —
+    /// a lookup table rather than a hand-written switch (SwiftUI's `Alignment` isn't
+    /// `RawRepresentable`, so this is the nearest equivalent).
+    private static let alignments: [String: Alignment] = [
+        "leading": .leading, "trailing": .trailing, "center": .center,
+        "top": .top, "bottom": .bottom,
+        "topLeading": .topLeading, "topTrailing": .topTrailing,
+        "bottomLeading": .bottomLeading, "bottomTrailing": .bottomTrailing,
+    ]
 
-    private static func warn(_ msg: String) {
-        FileHandle.standardError.write(Data("wixels: \(msg)\n".utf8))
-    }
+    private static func alignment(_ s: String) -> Alignment? { alignments[s] }
+
 }
