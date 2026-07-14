@@ -6,18 +6,19 @@
 // drawn. Not interactive — it's a status readout, no click behaviour in the JS.
 
 import SwiftUI
+import WixelsKit
 
-struct SysBox: Widget {
+struct SysBox: Wixel {
     let source: SysSource
 
     static let kind = "sys"
 
     /// Default placement + wiring for the desktop config. See Registry.swift.
-    static func spec(_ s: Services) -> WidgetSpec {
+    static func spec() -> WidgetSpec {
         WidgetSpec(kind: kind,
             defaultPlacement: .init(anchor: .topLeft, offset: .init(width: 40, height: -60),
                                     size: .init(width: 180, height: 120)),
-            mount: { host, p in host.mount(SysBox(source: SysSource()), placement: p) })
+            build: { _, _ in erase(SysBox(source: SysSource())) })
     }
     static let refresh: RefreshPolicy = .interval(30)
     static let px: CGFloat = 4

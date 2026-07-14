@@ -5,18 +5,19 @@
 // Native StatsSource (host ticks, host_statistics64, IOPS) — no tool spawns.
 
 import SwiftUI
+import WixelsKit
 
-struct Stats: Widget {
+struct Stats: Wixel {
     let source: StatsSource
 
     static let kind = "stats"
 
     /// Default placement + wiring for the desktop config. See Registry.swift.
-    static func spec(_ s: Services) -> WidgetSpec {
+    static func spec() -> WidgetSpec {
         WidgetSpec(kind: kind,
             defaultPlacement: .init(anchor: .bottomRight, offset: .init(width: 0, height: 36),
                                     size: .init(width: 220, height: 150), align: .trailing),
-            mount: { host, p in host.mount(Stats(source: StatsSource(cpu: s.cpu)), placement: p) })
+            build: { s, _ in erase(Stats(source: StatsSource(cpu: s.cpu))) })
     }
     static let refresh: RefreshPolicy = .interval(20)
     static let px: CGFloat = 6

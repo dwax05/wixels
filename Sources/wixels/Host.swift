@@ -6,8 +6,7 @@
 import AppKit
 import Combine
 import SwiftUI
-
-enum Anchor { case topLeft, topRight, bottomLeft, bottomRight, center, topCenter }
+import WixelsKit
 
 /// NSHostingView that accepts the very first click even though the host app is
 /// an inactive accessory — otherwise the first tap would just be swallowed.
@@ -28,7 +27,7 @@ final class InteractivePanel: NSPanel {
 /// size, and a factory for its self-updating SwiftUI view.
 private struct Mount {
     let ticker: any WidgetTicker
-    let anchor: Anchor
+    let anchor: WixelsKit.Anchor
     let offset: CGSize
     let size: CGSize
     let interactive: Bool
@@ -46,28 +45,18 @@ final class WidgetHost {
 
     init(palette: PaletteStore = PaletteStore()) { self.palette = palette }
 
-    /// Register a widget. Generic over the concrete `W`, then erased into a Mount.
+    /// Mount an already-erased widget (from a plugin spec's `build`) at a placement.
+    /// The ticker and the view come from the same `MountableWidget`, so they share
+    /// one model — a scheduler tick republishes exactly what the view observes.
     @discardableResult
-    func mount<W: Widget>(
-        _ widget: W, anchor: Anchor, offset: CGSize = .zero,
-        size: CGSize = .init(width: 150, height: 70), zBoost: Int = 0, align: Alignment? = nil
-    ) -> Self {
-        let model = WidgetModel(widget)
+    func mount(_ widget: any MountableWidget, placement p: Placement) -> Self {
         mounts.append(Mount(
-            ticker: model,
-            anchor: anchor, offset: offset, size: size,
-            interactive: W.interactive, zBoost: zBoost, align: align,
-            makeView: { AnyView(WidgetView(model: model, palette: $0)) }
+            ticker: widget.makeTicker(),
+            anchor: p.anchor, offset: p.offset, size: p.size,
+            interactive: widget.interactive, zBoost: p.zBoost, align: p.align,
+            makeView: { widget.makeView($0) }
         ))
         return self
-    }
-
-    /// Placement-struct overload — the form the registry/config path uses. Forwards
-    /// to the param mount so both callers share one implementation.
-    @discardableResult
-    func mount<W: Widget>(_ widget: W, placement p: Placement) -> Self {
-        mount(widget, anchor: p.anchor, offset: p.offset, size: p.size,
-              zBoost: p.zBoost, align: p.align)
     }
 
     private var occlusionObserver: (any NSObjectProtocol)?

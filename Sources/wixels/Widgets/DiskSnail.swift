@@ -14,19 +14,20 @@
 // sprite is positioned/rotated inside it. Crawl.box* are tuned to the sys box.
 
 import SwiftUI
+import WixelsKit
 
-struct DiskSnail: Widget {
+struct DiskSnail: Wixel {
     let disk: DiskSource
 
     static let kind = "disk-snail"
 
     /// Default placement + wiring for the desktop config. See Registry.swift.
-    static func spec(_ s: Services) -> WidgetSpec {
+    static func spec() -> WidgetSpec {
         WidgetSpec(kind: kind,
             defaultPlacement: .init(anchor: .topLeft, offset: .init(width: -3, height: -30),
                                     size: .init(width: DiskSnail.Crawl.containerW,
                                                 height: DiskSnail.Crawl.containerH)),
-            mount: { host, p in host.mount(DiskSnail(disk: DiskSource()), placement: p) })
+            build: { _, opts in erase(DiskSnail(disk: DiskSource(path: opts.string("path") ?? "/"))) })
     }
     static let refresh: RefreshPolicy = .idleStatic
     static let interactive = true

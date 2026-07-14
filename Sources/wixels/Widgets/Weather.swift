@@ -4,6 +4,7 @@
 // URLSession (the python's curl spawns become URLSession calls). interval(900s).
 
 import SwiftUI
+import WixelsKit
 
 enum WeatherKey: String, Sendable { case clear, night, cloud, rain, snow, storm, fog }
 
@@ -128,17 +129,17 @@ final class WeatherSource: DataSource, @unchecked Sendable {
     ]
 }
 
-struct Weather: Widget {
+struct Weather: Wixel {
     let source: WeatherSource
 
     static let kind = "weather"
 
     /// Default placement + wiring for the desktop config. See Registry.swift.
-    static func spec(_ s: Services) -> WidgetSpec {
+    static func spec() -> WidgetSpec {
         WidgetSpec(kind: kind,
             defaultPlacement: .init(anchor: .topRight, offset: .init(width: 0, height: -60),
                                     size: .init(width: 130, height: 150), align: .trailing),
-            mount: { host, p in host.mount(Weather(source: WeatherSource()), placement: p) })
+            build: { _, _ in erase(Weather(source: WeatherSource())) })
     }
     static let refresh: RefreshPolicy = .interval(900)   // 15 min; data effectively cached
     static let px: CGFloat = 5

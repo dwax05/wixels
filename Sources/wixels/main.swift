@@ -14,6 +14,7 @@
 // Quit: Ctrl-C.
 
 import AppKit
+import WixelsKit
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -22,13 +23,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ note: Notification) {
         let services = Services()                          // shared samplers (cpu, music)
         let host = WidgetHost(palette: PaletteStore())
-        // Index the catalog by kind, then mount each enabled entry in config order
-        // (order sets z-stacking among same-level widgets — frog before clock).
-        let specs = Dictionary(catalog(services).map { ($0.kind, $0) },
-                               uniquingKeysWith: { first, _ in first })
-        for entry in desktopConfig() {
-            guard let spec = specs[entry.kind] else { continue }   // unknown kind: skip
-            spec.mount(host, entry.override ?? spec.defaultPlacement)
+
+        // Build the spec table: the still-static built-ins, then the plugin dylibs
+        // (clock + stats today; all of them by phase 4).
+        let registrar = Registrar()
+        for spec in catalog() { registrar.add(spec) }
+        PluginLoader.load(into: registrar)
+
+        // Read the TOML layout (scaffolds a default on first run), then build+mount
+        // each enabled entry in file order (order sets z-stacking among same-level
+        // widgets — frog before clock).
+        Config.writeDefaultIfMissing()
+        for entry in Config.load() {
+            guard let spec = registrar.specs[entry.kind] else {
+                FileHandle.standardError.write(Data("wixels: no widget for kind '\(entry.kind)'\n".utf8))
+                continue
+            }
+            let placement = entry.placement.apply(to: spec.defaultPlacement)
+            let mountable = spec.build(services, entry.options)
+            host.mount(mountable, placement: placement)
         }
         host.run()
         self.host = host

@@ -11,18 +11,20 @@
 // methods plus the spec. Delete this file if you don't want it in your build.
 
 import SwiftUI
+import WixelsKit
 
-struct TemplateWidget: Widget {
+struct TemplateWidget: Wixel {
     static let kind = "template"                       // stable id, referenced in Desktop.swift
     static let refresh: RefreshPolicy = .idleStatic    // or .interval(seconds) to poll
 
-    /// Default placement + how to build this widget. `s: Services` gives you the
-    /// shared samplers (s.cpu, s.music) if you need them; ignore it otherwise.
-    static func spec(_ s: Services) -> WidgetSpec {
+    /// Default placement + how to build this widget. `build` gets the shared
+    /// samplers (s.cpu, s.music) and this widget's `Options` from the config; ignore
+    /// either if unused. `erase(_:)` hides the widget's Sample type from the host.
+    static func spec() -> WidgetSpec {
         WidgetSpec(kind: kind,
             defaultPlacement: .init(anchor: .center,
                                     size: .init(width: 150, height: 70)),
-            mount: { host, p in host.mount(TemplateWidget(), placement: p) })
+            build: { _, _ in erase(TemplateWidget()) })
     }
 
     /// Fetch the metric. Runs off the main actor; do the I/O here, no UI.

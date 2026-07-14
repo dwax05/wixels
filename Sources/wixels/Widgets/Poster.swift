@@ -6,18 +6,19 @@
 
 import AppKit
 import SwiftUI
+import WixelsKit
 
-struct Poster: Widget {
+struct Poster: Wixel {
     let monitor: MusicMonitor
 
     static let kind = "poster"
 
     /// Default placement + wiring for the desktop config. See Registry.swift.
-    static func spec(_ s: Services) -> WidgetSpec {
+    static func spec() -> WidgetSpec {
         WidgetSpec(kind: kind,
             defaultPlacement: .init(anchor: .topRight, offset: .init(width: 0, height: -220),
                                     size: .init(width: 230, height: 460), align: .trailing),
-            mount: { host, p in host.mount(Poster(monitor: s.music), placement: p) })
+            build: { s, _ in erase(Poster(monitor: s.music)) })
     }
     static let refresh: RefreshPolicy = .interval(4)
     static let interactive = true

@@ -18,54 +18,69 @@ import Foundation
 
 /// The full current-track snapshot the now-playing widget draws. `art` is raw
 /// base64 (the shared cache stores it un-prefixed), "" when there's no artwork.
-struct NowPlayingInfo: Equatable, Sendable {
-    var hasTrack: Bool
-    var title: String
-    var artist: String
-    var playing: Bool
-    var art: String
+public struct NowPlayingInfo: Equatable, Sendable {
+    public var hasTrack: Bool
+    public var title: String
+    public var artist: String
+    public var playing: Bool
+    public var art: String
 
-    static let idle = NowPlayingInfo(hasTrack: false, title: "", artist: "", playing: false, art: "")
+    public init(hasTrack: Bool, title: String, artist: String, playing: Bool, art: String) {
+        self.hasTrack = hasTrack; self.title = title; self.artist = artist
+        self.playing = playing; self.art = art
+    }
+
+    public static let idle = NowPlayingInfo(hasTrack: false, title: "", artist: "", playing: false, art: "")
 }
 
 /// The richer snapshot the poster card draws — adds album + formatted duration.
-struct PosterInfo: Equatable, Sendable {
-    var hasTrack: Bool
-    var title: String
-    var artist: String
-    var album: String
-    var duration: String     // m:ss
-    var playing: Bool
-    var art: String          // raw base64
+public struct PosterInfo: Equatable, Sendable {
+    public var hasTrack: Bool
+    public var title: String
+    public var artist: String
+    public var album: String
+    public var duration: String     // m:ss
+    public var playing: Bool
+    public var art: String          // raw base64
 
-    static let idle = PosterInfo(hasTrack: false, title: "", artist: "", album: "",
+    public init(hasTrack: Bool, title: String, artist: String, album: String,
+                duration: String, playing: Bool, art: String) {
+        self.hasTrack = hasTrack; self.title = title; self.artist = artist; self.album = album
+        self.duration = duration; self.playing = playing; self.art = art
+    }
+
+    public static let idle = PosterInfo(hasTrack: false, title: "", artist: "", album: "",
                                  duration: "", playing: false, art: "")
 }
 
 /// Optimistic play/pause flip: a click flips the shown state immediately and holds
 /// it for a few seconds until the next poll reads the real state. Shared by the
 /// cassette (NowPlaying) and poster cards.
-struct PlayOverride {
+public struct PlayOverride {
     private var pending: (playing: Bool, until: Date)?
 
-    mutating func flip(to playing: Bool, for seconds: TimeInterval = 3.5) {
+    public init() {}
+
+    public mutating func flip(to playing: Bool, for seconds: TimeInterval = 3.5) {
         pending = (playing, Date().addingTimeInterval(seconds))
     }
 
     /// The shown state: the pending flip while it's still fresh, else the real poll.
-    func resolve(_ real: Bool) -> Bool {
+    public func resolve(_ real: Bool) -> Bool {
         if let p = pending, Date() < p.until { return p.playing }
         return real
     }
 }
 
-final class MusicMonitor: @unchecked Sendable {
+public final class MusicMonitor: @unchecked Sendable {
     private let cache = ("~/.cache/cynaberii/nowplaying.json" as NSString).expandingTildeInPath
     private let staleSeconds: TimeInterval = 30
     private let npCLI = "/opt/homebrew/bin/nowplaying-cli"
 
+    public init() {}
+
     /// True when something is actively playing (playbackRate > 0).
-    func isPlayingNow() async -> Bool {
+    public func isPlayingNow() async -> Bool {
         if let d = cacheDict() { return rate(d["playbackRate"]) > 0 }
         return (Double(runNP(["get", "playbackRate"]).first ?? "") ?? 0) > 0
     }
@@ -73,7 +88,7 @@ final class MusicMonitor: @unchecked Sendable {
     /// Full track snapshot for the now-playing widget: shared cache first (has art
     /// + all fields), falling back to a direct `nowplaying-cli get` trio (no art)
     /// when the bar isn't publishing.
-    func nowPlaying() async -> NowPlayingInfo {
+    public func nowPlaying() async -> NowPlayingInfo {
         if let d = cacheDict() {
             let title = string(d["title"])
             return NowPlayingInfo(
@@ -89,7 +104,7 @@ final class MusicMonitor: @unchecked Sendable {
     }
 
     /// Full poster snapshot: cache first (has album/duration/art), CLI fallback.
-    func poster() async -> PosterInfo {
+    public func poster() async -> PosterInfo {
         if let d = cacheDict() {
             let title = string(d["title"])
             return PosterInfo(
@@ -106,13 +121,13 @@ final class MusicMonitor: @unchecked Sendable {
 
     /// Toggle play/pause (click action). MediaRemote's writes still work for an
     /// untrusted binary even though its now-playing *reads* are gated (see header).
-    func togglePlayPause() { _ = runNP(["togglePlayPause"]) }
+    public func togglePlayPause() { _ = runNP(["togglePlayPause"]) }
 
     /// Skip to the next track.
-    func next() { _ = runNP(["next"]) }
+    public func next() { _ = runNP(["next"]) }
 
     /// Toggle Spotify shuffle over AppleScript (harmless no-op if Spotify isn't the player).
-    func toggleShuffle() {
+    public func toggleShuffle() {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
         p.arguments = ["-e", "tell application \"Spotify\" to set shuffling to not shuffling"]

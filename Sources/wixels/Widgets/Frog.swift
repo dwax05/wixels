@@ -6,8 +6,9 @@
 // shoves it down out from behind the card and flicks its tongue.
 
 import SwiftUI
+import WixelsKit
 
-struct Frog: Widget {
+struct Frog: Wixel {
     let source: FrogSource
 
     static let kind = "frog"
@@ -15,11 +16,11 @@ struct Frog: Widget {
     /// Default placement + wiring for the desktop config. See Registry.swift.
     /// Mounted before the clock (same window level) so the clock orders in front
     /// and hides the frog's body — keep frog above clock in Desktop.swift order.
-    static func spec(_ s: Services) -> WidgetSpec {
+    static func spec() -> WidgetSpec {
         WidgetSpec(kind: kind,
             defaultPlacement: .init(anchor: .topCenter, offset: .init(width: 0, height: -136),
                                     size: .init(width: 100, height: 200)),
-            mount: { host, p in host.mount(Frog(source: FrogSource()), placement: p) })
+            build: { _, _ in erase(Frog(source: FrogSource())) })
     }
     static let refresh: RefreshPolicy = .interval(8)   // thermal changes slowly
     static let interactive = true

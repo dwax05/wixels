@@ -7,6 +7,7 @@
 
 import AppKit
 import SwiftUI
+import WixelsKit
 
 /// Loads the curated quote list once; hands out random picks. Immutable → Sendable.
 struct QuoteSource: Sendable {
@@ -50,17 +51,17 @@ struct QuoteSource: Sendable {
     }
 }
 
-struct Quotes: Widget {
+struct Quotes: Wixel {
     let source: QuoteSource
 
     static let kind = "quotes"
 
     /// Default placement + wiring for the desktop config. See Registry.swift.
-    static func spec(_ s: Services) -> WidgetSpec {
+    static func spec() -> WidgetSpec {
         WidgetSpec(kind: kind,
             defaultPlacement: .init(anchor: .bottomLeft, offset: .init(width: 300, height: 90),
                                     size: .init(width: 250, height: 150)),
-            mount: { host, p in host.mount(Quotes(source: QuoteSource()), placement: p) })
+            build: { _, _ in erase(Quotes(source: QuoteSource())) })
     }
     static let refresh: RefreshPolicy = .idleStatic
     static let interactive = true

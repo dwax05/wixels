@@ -13,19 +13,19 @@
 // hearts for petSeconds, ported from the JS useState(petting).
 
 import SwiftUI
+import WixelsKit
 
-struct CatPet: Widget {
+struct CatPet: Wixel {
     let source: PetSource
 
     static let kind = "pet"
 
     /// Default placement + wiring for the desktop config. See Registry.swift.
-    static func spec(_ s: Services) -> WidgetSpec {
+    static func spec() -> WidgetSpec {
         WidgetSpec(kind: kind,
             defaultPlacement: .init(anchor: .bottomLeft, offset: .init(width: 224, height: 116),
                                     size: .init(width: 92, height: 106)),
-            mount: { host, p in
-                host.mount(CatPet(source: PetSource(cpu: s.cpu, music: s.music)), placement: p) })
+            build: { s, _ in erase(CatPet(source: PetSource(cpu: s.cpu, music: s.music))) })
     }
     static let refresh: RefreshPolicy = .interval(3)   // native sources are cheap, so poll snappier than pet.py's 10s
     static let interactive = true

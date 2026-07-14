@@ -8,13 +8,13 @@
 
 import SwiftUI
 
-typealias Sprite = [String]   // rows of equal-length character strings
-typealias Cell = (row: Int, col: Int, ch: Character)   // one grid edit — named, not $0.0/$0.1
+public typealias Sprite = [String]   // rows of equal-length character strings
+public typealias Cell = (row: Int, col: Int, ch: Character)   // one grid edit — named, not $0.0/$0.1
 
 // MARK: - Grid helpers (ports of the JS `set` / `fillShell`)
 
 /// Overwrite individual cells (out-of-bounds edits are ignored).
-func set(_ grid: Sprite, _ cells: [Cell]) -> Sprite {
+public func set(_ grid: Sprite, _ cells: [Cell]) -> Sprite {
     var g = grid.map { Array($0) }
     for cell in cells where g.indices.contains(cell.row) && g[cell.row].indices.contains(cell.col) {
         g[cell.row][cell.col] = cell.ch
@@ -24,7 +24,7 @@ func set(_ grid: Sprite, _ cells: [Cell]) -> Sprite {
 
 /// Fill the shell interior ('H') bottom-up to `pct` (0…100), marking cells
 /// 'F'(illed) below the line and 'e'(mpty) above — the disk-snail gauge.
-func fillShell(_ grid: Sprite, _ pct: Double) -> Sprite {
+public func fillShell(_ grid: Sprite, _ pct: Double) -> Sprite {
     let hRows = grid.enumerated().filter { $0.element.contains("H") }.map { $0.offset }
     guard let top = hRows.min(), let bot = hRows.max() else { return grid }
     let line = Double(bot) - (pct / 100) * Double(bot - top + 1)
@@ -60,13 +60,17 @@ struct PixelFrame: View {
 
 /// A sprite that may have multiple frames. One frame → static. Many frames →
 /// cycles at `frameMS` via TimelineView (only then does it animate).
-struct PixelStrip: View {
+public struct PixelStrip: View {
     let frames: [Sprite]
     let px: CGFloat
     let palette: [Character: Color]
     var frameMS: Double = 0
 
-    var body: some View {
+    public init(frames: [Sprite], px: CGFloat, palette: [Character: Color], frameMS: Double = 0) {
+        self.frames = frames; self.px = px; self.palette = palette; self.frameMS = frameMS
+    }
+
+    public var body: some View {
         if frames.count > 1 && frameMS > 0 {
             TimelineView(.animation) { ctx in
                 let t = ctx.date.timeIntervalSinceReferenceDate
@@ -131,11 +135,11 @@ struct Pane: ViewModifier {
 }
 
 extension View {
-    func pane(_ palette: Palette, insets: EdgeInsets = .init(top: 14, leading: 16, bottom: 14, trailing: 16)) -> some View {
+    public func pane(_ palette: Palette, insets: EdgeInsets = .init(top: 14, leading: 16, bottom: 14, trailing: 16)) -> some View {
         modifier(Pane(palette: palette, insets: insets))
     }
     /// Bare frame (border + offset shadow) for cards that supply their own fill.
-    func framedPane(border: Color, shadow: Color, fill: Color? = nil,
+    public func framedPane(border: Color, shadow: Color, fill: Color? = nil,
                     borderW: CGFloat = 4, shadowOffset: CGFloat = 4) -> some View {
         modifier(FramedPane(border: border, shadowColor: shadow, fill: fill,
                             borderW: borderW, shadow: shadowOffset))
@@ -147,7 +151,7 @@ extension Font {
     /// `'Silkscreen', 'Press Start 2P', 'Monaco', monospace` stack. `fixedSize`
     /// keeps the glyphs pixel-crisp (no Dynamic Type scaling); CoreText cascades
     /// missing glyphs (♪ ▶ ❚) to the system fallback, same as the browser did.
-    static func pixel(_ size: CGFloat, bold: Bool = false) -> Font {
+    public static func pixel(_ size: CGFloat, bold: Bool = false) -> Font {
         .custom("Silkscreen", fixedSize: size).weight(bold ? .bold : .regular)
     }
 }
@@ -158,7 +162,7 @@ extension Font {
 ///   fadeIn   — phase fraction (0…1) spent fading in before fading back out
 ///   rise     — px travelled upward across one loop
 ///   scaleGrow— extra scale gained over the loop (0 = constant size)
-struct RisingParticle: View {
+public struct RisingParticle: View {
     let sprite: Sprite
     let palette: [Character: Color]
     let size: CGFloat
@@ -171,7 +175,15 @@ struct RisingParticle: View {
     let rot: Double
     var scaleGrow: CGFloat = 0
 
-    var body: some View {
+    public init(sprite: Sprite, palette: [Character: Color], size: CGFloat, x: CGFloat,
+                baseY: CGFloat, rise: CGFloat, fadeIn: Double, delay: Double, dur: Double,
+                rot: Double, scaleGrow: CGFloat = 0) {
+        self.sprite = sprite; self.palette = palette; self.size = size; self.x = x
+        self.baseY = baseY; self.rise = rise; self.fadeIn = fadeIn; self.delay = delay
+        self.dur = dur; self.rot = rot; self.scaleGrow = scaleGrow
+    }
+
+    public var body: some View {
         TimelineView(.animation) { ctx in
             let t = ctx.date.timeIntervalSinceReferenceDate
             let phase = (((t - delay) / dur).truncatingRemainder(dividingBy: 1) + 1)
@@ -192,7 +204,7 @@ struct RisingParticle: View {
 /// `seconds`, ignoring re-entry while it's already active. Both widgets' tap
 /// reactions (the snail's shy tuck, the cat's happy burst) are this same shape.
 @MainActor
-func triggerTransient(_ flag: Binding<Bool>, for seconds: Double,
+public func triggerTransient(_ flag: Binding<Bool>, for seconds: Double,
                       animated: Bool = false, onReset: @escaping () -> Void = {}) {
     guard !flag.wrappedValue else { return }
     if animated { withAnimation(.easeOut(duration: 0.12)) { flag.wrappedValue = true } }

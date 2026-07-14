@@ -4,17 +4,18 @@
 // colon blink); the digits only change on the minute. idleStatic: no polling.
 
 import SwiftUI
+import WixelsKit
 
-struct PixelClock: Widget {
+struct PixelClock: Wixel {
     static let kind = "clock"
 
     /// Default placement + wiring for the desktop config. See Registry.swift.
     /// zBoost: 1 keeps the clock above the frog it hides, even after a click reorders.
-    static func spec(_ s: Services) -> WidgetSpec {
+    static func spec() -> WidgetSpec {
         WidgetSpec(kind: kind,
             defaultPlacement: .init(anchor: .topCenter, offset: .init(width: 0, height: -70),
                                     size: .init(width: 220, height: 120), zBoost: 1),
-            mount: { host, p in host.mount(PixelClock(), placement: p) })
+            build: { _, _ in erase(PixelClock()) })
     }
     static let refresh: RefreshPolicy = .idleStatic
     // interactive (no click action) only so it shares the frog's window level and

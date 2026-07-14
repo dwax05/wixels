@@ -8,6 +8,7 @@
 
 import AppKit
 import SwiftUI
+import WixelsKit
 
 /// Decode raw base64 artwork into an image (nil when absent/undecodable). Shared by
 /// the cassette + poster cards.
@@ -18,17 +19,17 @@ func decodeArtwork(_ b64: String) -> NSImage? {
     return NSImage(data: data)
 }
 
-struct NowPlaying: Widget {
+struct NowPlaying: Wixel {
     let monitor: MusicMonitor
 
     static let kind = "nowplaying"
 
     /// Default placement + wiring for the desktop config. See Registry.swift.
-    static func spec(_ s: Services) -> WidgetSpec {
+    static func spec() -> WidgetSpec {
         WidgetSpec(kind: kind,
             defaultPlacement: .init(anchor: .bottomLeft, offset: .init(width: 12, height: 36),
                                     size: .init(width: 320, height: 96)),
-            mount: { host, p in host.mount(NowPlaying(monitor: s.music), placement: p) })
+            build: { s, _ in erase(NowPlaying(monitor: s.music)) })
     }
     static let refresh: RefreshPolicy = .interval(3)
     static let interactive = true

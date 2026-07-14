@@ -52,16 +52,19 @@ enum Power {
 
 // MARK: - Disk
 
-struct DiskInfo: Equatable, Sendable {
-    var usedFraction: Double      // 0…1
-    var freeBytes: Int64
+public struct DiskInfo: Equatable, Sendable {
+    public var usedFraction: Double      // 0…1
+    public var freeBytes: Int64
+    public init(usedFraction: Double, freeBytes: Int64) {
+        self.usedFraction = usedFraction; self.freeBytes = freeBytes
+    }
 }
 
-struct DiskSource: DataSource {
-    let path: String
-    init(path: String = "/") { self.path = path }
+public struct DiskSource: DataSource {
+    public let path: String
+    public init(path: String = "/") { self.path = path }
 
-    func read() async -> DiskInfo {
+    public func read() async -> DiskInfo {
         let url = URL(fileURLWithPath: path)
         let keys: Set<URLResourceKey> = [
             .volumeTotalCapacityKey,
@@ -87,15 +90,15 @@ struct DiskSource: DataSource {
 /// counters; two reads closer together than `minInterval` return the last
 /// computed value instead of a near-zero micro-window, so a slow poller sharing
 /// the sampler with a fast one still sees a meaningful load.
-actor CPUSource: DataSource {
+public actor CPUSource: DataSource {
     private var prev: host_cpu_load_info?
     private var cached: Double = 0
     private var lastRead = Date.distantPast
     private let minInterval: TimeInterval
 
-    init(minInterval: TimeInterval = 1.0) { self.minInterval = minInterval }
+    public init(minInterval: TimeInterval = 1.0) { self.minInterval = minInterval }
 
-    func read() async -> Double {
+    public func read() async -> Double {
         let now = Date()
         if now.timeIntervalSince(lastRead) < minInterval { return cached }
         lastRead = now
@@ -125,31 +128,34 @@ actor CPUSource: DataSource {
 
 // MARK: - Pet composite source (cpu + net + battery + music -> a mood)
 
-enum PetMood: Sendable { case idle, sleep, run, eat }
+public enum PetMood: Sendable { case idle, sleep, run, eat }
 
-struct PetState: Equatable, Sendable {
-    var mood: PetMood
-    var charging: Bool
-    var music: Bool
-    var cpu: Double        // 0…1
+public struct PetState: Equatable, Sendable {
+    public var mood: PetMood
+    public var charging: Bool
+    public var music: Bool
+    public var cpu: Double        // 0…1
+    public init(mood: PetMood, charging: Bool, music: Bool, cpu: Double) {
+        self.mood = mood; self.charging = charging; self.music = music; self.cpu = cpu
+    }
 }
 
 /// Composes several native readings into the pet's mood, mirroring pet.py's
 /// state machine — but with syscalls instead of `top`/`netstat`/`pmset` spawns.
 /// @unchecked Sendable: mutable `prevNet` is only touched inside `read()`, which
 /// the scheduler calls serially.
-final class PetSource: DataSource, @unchecked Sendable {
+public final class PetSource: DataSource, @unchecked Sendable {
     private let cpu: CPUSource
     private let music: MusicMonitor
     private var prevNet: (t: Date, bytes: UInt64)?
 
-    init(cpu: CPUSource, music: MusicMonitor) { self.cpu = cpu; self.music = music }
+    public init(cpu: CPUSource, music: MusicMonitor) { self.cpu = cpu; self.music = music }
 
     static let eatKBps = 150.0
     static let runPct = 70.0
     static let sleepPct = 8.0
 
-    func read() async -> PetState {
+    public func read() async -> PetState {
         let load = await cpu.read()               // 0…1
         let kbps = netKBps()
         let onPower = Power.read().onPower
@@ -192,23 +198,27 @@ final class PetSource: DataSource, @unchecked Sendable {
 
 // MARK: - Stats composite source (cpu wilt + memory + battery -> soft-stats card)
 
-struct StatsInfo: Equatable, Sendable {
-    var cpu: Int          // %
-    var mem: Int          // %
-    var battery: Int      // %
-    var charging: Bool
-    var plugged: Bool
-    var wilt: Int         // 0 (perky) … 3 (droopy), from CPU load
+public struct StatsInfo: Equatable, Sendable {
+    public var cpu: Int          // %
+    public var mem: Int          // %
+    public var battery: Int      // %
+    public var charging: Bool
+    public var plugged: Bool
+    public var wilt: Int         // 0 (perky) … 3 (droopy), from CPU load
+    public init(cpu: Int, mem: Int, battery: Int, charging: Bool, plugged: Bool, wilt: Int) {
+        self.cpu = cpu; self.mem = mem; self.battery = battery
+        self.charging = charging; self.plugged = plugged; self.wilt = wilt
+    }
 }
 
 /// cpu (shared host-tick sampler) + memory (host_statistics64) + battery (IOPS),
 /// all native — the stock-tool spawns in stats.py (top/vm_stat/pmset) become syscalls.
-final class StatsSource: DataSource, @unchecked Sendable {
+public final class StatsSource: DataSource, @unchecked Sendable {
     private let cpu: CPUSource
 
-    init(cpu: CPUSource) { self.cpu = cpu }
+    public init(cpu: CPUSource) { self.cpu = cpu }
 
-    func read() async -> StatsInfo {
+    public func read() async -> StatsInfo {
         let load = await cpu.read() * 100                 // 0…100
         let power = Power.read()
         let wilt = load < 25 ? 0 : load < 50 ? 1 : load < 75 ? 2 : 3
@@ -240,14 +250,15 @@ final class StatsSource: DataSource, @unchecked Sendable {
 
 // MARK: - Owl presence source (HID idle time -> awake/drowsy/asleep)
 
-enum OwlState: Sendable { case awake, drowsy, asleep }
+public enum OwlState: Sendable { case awake, drowsy, asleep }
 
 /// Presence gauge from HID idle seconds (HIDIdleTime on IOHIDSystem), read straight
 /// from the IO registry — no `ioreg` spawn. drowsy ≥10s idle, asleep ≥30s.
-struct OwlSource: DataSource {
+public struct OwlSource: DataSource {
     static let drowsyS = 10.0, asleepS = 30.0
+    public init() {}
 
-    func read() async -> OwlState {
+    public func read() async -> OwlState {
         let idle = Self.idleSeconds()
         return idle >= Self.asleepS ? .asleep : idle >= Self.drowsyS ? .drowsy : .awake
     }
@@ -268,10 +279,11 @@ struct OwlSource: DataSource {
 
 /// The frog warms cool→hot with system thermal pressure. Native — no `swift -e`
 /// spawn like frog.py: NSProcessInfo.thermalState needs no privileges.
-enum FrogState: Int, Sendable { case nominal = 0, fair, serious, critical }
+public enum FrogState: Int, Sendable { case nominal = 0, fair, serious, critical }
 
-struct FrogSource: DataSource {
-    func read() async -> FrogState {
+public struct FrogSource: DataSource {
+    public init() {}
+    public func read() async -> FrogState {
         switch ProcessInfo.processInfo.thermalState {
         case .nominal:  return .nominal
         case .fair:     return .fair
@@ -284,19 +296,23 @@ struct FrogSource: DataSource {
 
 // MARK: - Sys composite source (wifi + disk -> the cynaberii-sys box)
 
-struct SysInfo: Equatable, Sendable {
-    var connected: Bool
-    var ssid: String
-    var diskPct: Double        // 0…100, of the Data volume (matches sys.py)
+public struct SysInfo: Equatable, Sendable {
+    public var connected: Bool
+    public var ssid: String
+    public var diskPct: Double        // 0…100, of the Data volume (matches sys.py)
+    public init(connected: Bool, ssid: String, diskPct: Double) {
+        self.connected = connected; self.ssid = ssid; self.diskPct = diskPct
+    }
 }
 
 /// Ports cynaberii-sys/sys.py: wifi connection + Data-volume disk %. Wifi state is
 /// read natively (CoreWLAN for the interface, getifaddrs for an assigned IPv4 —
 /// which needs no Location Services permission, unlike SSID). Disk reuses DiskSource.
-struct SysSource: DataSource {
+public struct SysSource: DataSource {
     private let dataVolume = DiskSource(path: "/System/Volumes/Data")
+    public init() {}
 
-    func read() async -> SysInfo {
+    public func read() async -> SysInfo {
         let (connected, ssid) = Self.wifi()
         let disk = await dataVolume.read().usedFraction * 100
         return SysInfo(connected: connected, ssid: ssid, diskPct: disk)

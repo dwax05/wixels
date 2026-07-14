@@ -5,18 +5,19 @@
 // Click makes it blink. Loose transparent sprite (no pane).
 
 import SwiftUI
+import WixelsKit
 
-struct Owl: Widget {
+struct Owl: Wixel {
     let source: OwlSource
 
     static let kind = "owl"
 
     /// Default placement + wiring for the desktop config. See Registry.swift.
-    static func spec(_ s: Services) -> WidgetSpec {
+    static func spec() -> WidgetSpec {
         WidgetSpec(kind: kind,
             defaultPlacement: .init(anchor: .bottomRight, offset: .init(width: 0, height: 150),
                                     size: .init(width: 90, height: 70)),
-            mount: { host, p in host.mount(Owl(source: OwlSource()), placement: p) })
+            build: { _, _ in erase(Owl(source: OwlSource())) })
     }
     static let refresh: RefreshPolicy = .interval(7)   // wake within ~7s of return
     static let interactive = true

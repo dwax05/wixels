@@ -9,7 +9,8 @@
 import Foundation
 
 @MainActor
-final class Services {
-    lazy var music = MusicMonitor()   // pet + now-playing + poster
-    lazy var cpu = CPUSource()        // pet + stats
+public final class Services {
+    public lazy var music = MusicMonitor()   // pet + now-playing + poster
+    public lazy var cpu = CPUSource()        // pet + stats
+    public init() {}
 }

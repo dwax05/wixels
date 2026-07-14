@@ -10,16 +10,17 @@
 // the top of the pane onto the plant while it's growing.
 
 import SwiftUI
+import WixelsKit
 
-struct Plant: Widget {
+struct Plant: Wixel {
     static let kind = "plant"
 
     /// Default placement + wiring for the desktop config. See Registry.swift.
-    static func spec(_ s: Services) -> WidgetSpec {
+    static func spec() -> WidgetSpec {
         WidgetSpec(kind: kind,
             defaultPlacement: .init(anchor: .topLeft, offset: .init(width: 40, height: -220),
                                     size: .init(width: 120, height: 130)),
-            mount: { host, p in host.mount(Plant(), placement: p) })
+            build: { _, _ in erase(Plant()) })
     }
     static let refresh: RefreshPolicy = .idleStatic
     static let interactive = true
