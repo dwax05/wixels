@@ -1,14 +1,13 @@
 // wixels — entry point.
 //
 // A native macOS desktop-widget agent replacing the cynaberii Übersicht widgets.
-// The whole app is: build a host, resolve the desktop config against the catalog,
-// mount, run. Everything else (windows, desktop layer, palette, scheduling,
-// occlusion) lives behind WidgetHost.
+// The whole app is: build a host, load the widget plugins, resolve the TOML config
+// against the registered specs, mount, run. Everything else (windows, desktop layer,
+// palette, scheduling, occlusion) lives behind WidgetHost.
 //
-// The two files a user edits:
-//   Desktop.swift   — which widgets are on + where (see desktopConfig()).
-//   Widgets/*.swift — a widget's own struct + its `spec` (default placement).
-// This file just wires them together and never needs touching to add a widget.
+// Widgets are plugin dylibs (Sources/Widget*/), each registering its spec via a
+// @_cdecl shim. The layout lives in ~/.config/wixels/desktop.toml. This file never
+// needs touching to add or rearrange a widget.
 //
 // Run:  cd ~/Developer/wixels && swift run
 // Quit: Ctrl-C.
@@ -24,10 +23,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let services = Services()                          // shared samplers (cpu, music)
         let host = WidgetHost(palette: PaletteStore())
 
-        // Build the spec table: the still-static built-ins, then the plugin dylibs
-        // (clock + stats today; all of them by phase 4).
+        // Build the spec table entirely from plugin dylibs — every widget is a
+        // libWidget*.dylib the loader dlopens and registers (no static built-ins).
         let registrar = Registrar()
-        for spec in catalog() { registrar.add(spec) }
         PluginLoader.load(into: registrar)
 
         // Read the TOML layout (scaffolds a default on first run), then build+mount

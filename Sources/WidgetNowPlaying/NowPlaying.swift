@@ -10,15 +10,6 @@ import AppKit
 import SwiftUI
 import WixelsKit
 
-/// Decode raw base64 artwork into an image (nil when absent/undecodable). Shared by
-/// the cassette + poster cards.
-func decodeArtwork(_ b64: String) -> NSImage? {
-    guard !b64.isEmpty,
-          let data = Data(base64Encoded: b64, options: .ignoreUnknownCharacters)
-    else { return nil }
-    return NSImage(data: data)
-}
-
 struct NowPlaying: Wixel {
     let monitor: MusicMonitor
 

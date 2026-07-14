@@ -6,7 +6,17 @@
 // port of Übersicht's `steps()` strip scroll). A single-frame sprite draws
 // statically — no animation, so the compositor stays idle (the battery rule).
 
+import AppKit
 import SwiftUI
+
+/// Decode raw base64 artwork into an image (nil when absent/undecodable). Shared by
+/// the cassette (NowPlaying) + poster cards.
+public func decodeArtwork(_ b64: String) -> NSImage? {
+    guard !b64.isEmpty,
+          let data = Data(base64Encoded: b64, options: .ignoreUnknownCharacters)
+    else { return nil }
+    return NSImage(data: data)
+}
 
 public typealias Sprite = [String]   // rows of equal-length character strings
 public typealias Cell = (row: Int, col: Int, ch: Character)   // one grid edit — named, not $0.0/$0.1
