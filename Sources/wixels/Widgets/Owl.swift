@@ -10,6 +10,14 @@ struct Owl: Widget {
     let source: OwlSource
 
     static let kind = "owl"
+
+    /// Default placement + wiring for the desktop config. See Registry.swift.
+    static func spec(_ s: Services) -> WidgetSpec {
+        WidgetSpec(kind: kind,
+            defaultPlacement: .init(anchor: .bottomRight, offset: .init(width: 0, height: 150),
+                                    size: .init(width: 90, height: 70)),
+            mount: { host, p in host.mount(Owl(source: OwlSource()), placement: p) })
+    }
     static let refresh: RefreshPolicy = .interval(7)   // wake within ~7s of return
     static let interactive = true
     static let px: CGFloat = 3

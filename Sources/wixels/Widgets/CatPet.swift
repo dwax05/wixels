@@ -18,6 +18,15 @@ struct CatPet: Widget {
     let source: PetSource
 
     static let kind = "pet"
+
+    /// Default placement + wiring for the desktop config. See Registry.swift.
+    static func spec(_ s: Services) -> WidgetSpec {
+        WidgetSpec(kind: kind,
+            defaultPlacement: .init(anchor: .bottomLeft, offset: .init(width: 224, height: 116),
+                                    size: .init(width: 92, height: 106)),
+            mount: { host, p in
+                host.mount(CatPet(source: PetSource(cpu: s.cpu, music: s.music)), placement: p) })
+    }
     static let refresh: RefreshPolicy = .interval(3)   // native sources are cheap, so poll snappier than pet.py's 10s
     static let interactive = true
     static let petSeconds = 1.5                        // how long the happy reaction lasts

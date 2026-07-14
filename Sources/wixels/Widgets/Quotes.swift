@@ -54,6 +54,14 @@ struct Quotes: Widget {
     let source: QuoteSource
 
     static let kind = "quotes"
+
+    /// Default placement + wiring for the desktop config. See Registry.swift.
+    static func spec(_ s: Services) -> WidgetSpec {
+        WidgetSpec(kind: kind,
+            defaultPlacement: .init(anchor: .bottomLeft, offset: .init(width: 300, height: 90),
+                                    size: .init(width: 250, height: 150)),
+            mount: { host, p in host.mount(Quotes(source: QuoteSource()), placement: p) })
+    }
     static let refresh: RefreshPolicy = .idleStatic
     static let interactive = true
 

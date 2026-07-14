@@ -11,6 +11,16 @@ struct Frog: Widget {
     let source: FrogSource
 
     static let kind = "frog"
+
+    /// Default placement + wiring for the desktop config. See Registry.swift.
+    /// Mounted before the clock (same window level) so the clock orders in front
+    /// and hides the frog's body — keep frog above clock in Desktop.swift order.
+    static func spec(_ s: Services) -> WidgetSpec {
+        WidgetSpec(kind: kind,
+            defaultPlacement: .init(anchor: .topCenter, offset: .init(width: 0, height: -136),
+                                    size: .init(width: 100, height: 200)),
+            mount: { host, p in host.mount(Frog(source: FrogSource()), placement: p) })
+    }
     static let refresh: RefreshPolicy = .interval(8)   // thermal changes slowly
     static let interactive = true
     static let px: CGFloat = 4

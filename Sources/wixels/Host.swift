@@ -62,6 +62,14 @@ final class WidgetHost {
         return self
     }
 
+    /// Placement-struct overload — the form the registry/config path uses. Forwards
+    /// to the param mount so both callers share one implementation.
+    @discardableResult
+    func mount<W: Widget>(_ widget: W, placement p: Placement) -> Self {
+        mount(widget, anchor: p.anchor, offset: p.offset, size: p.size,
+              zBoost: p.zBoost, align: p.align)
+    }
+
     private var occlusionObserver: (any NSObjectProtocol)?
     private var paletteObserver: AnyCancellable?
 

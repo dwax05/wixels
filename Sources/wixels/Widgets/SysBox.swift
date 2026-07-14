@@ -11,6 +11,14 @@ struct SysBox: Widget {
     let source: SysSource
 
     static let kind = "sys"
+
+    /// Default placement + wiring for the desktop config. See Registry.swift.
+    static func spec(_ s: Services) -> WidgetSpec {
+        WidgetSpec(kind: kind,
+            defaultPlacement: .init(anchor: .topLeft, offset: .init(width: 40, height: -60),
+                                    size: .init(width: 180, height: 120)),
+            mount: { host, p in host.mount(SysBox(source: SysSource()), placement: p) })
+    }
     static let refresh: RefreshPolicy = .interval(30)
     static let px: CGFloat = 4
 

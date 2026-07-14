@@ -13,6 +13,14 @@ import SwiftUI
 
 struct Plant: Widget {
     static let kind = "plant"
+
+    /// Default placement + wiring for the desktop config. See Registry.swift.
+    static func spec(_ s: Services) -> WidgetSpec {
+        WidgetSpec(kind: kind,
+            defaultPlacement: .init(anchor: .topLeft, offset: .init(width: 40, height: -220),
+                                    size: .init(width: 120, height: 130)),
+            mount: { host, p in host.mount(Plant(), placement: p) })
+    }
     static let refresh: RefreshPolicy = .idleStatic
     static let interactive = true
 

@@ -22,6 +22,14 @@ struct NowPlaying: Widget {
     let monitor: MusicMonitor
 
     static let kind = "nowplaying"
+
+    /// Default placement + wiring for the desktop config. See Registry.swift.
+    static func spec(_ s: Services) -> WidgetSpec {
+        WidgetSpec(kind: kind,
+            defaultPlacement: .init(anchor: .bottomLeft, offset: .init(width: 12, height: 36),
+                                    size: .init(width: 320, height: 96)),
+            mount: { host, p in host.mount(NowPlaying(monitor: s.music), placement: p) })
+    }
     static let refresh: RefreshPolicy = .interval(3)
     static let interactive = true
 
