@@ -10,8 +10,12 @@ import AppKit
 
 @MainActor
 final class StatusBarController: NSObject, NSMenuDelegate {
-    private let host: WidgetHost
+    private var host: WidgetHost
     private let item: NSStatusItem
+
+    /// Point at the host built by a live config reload. The menu is rebuilt on open
+    /// (`menuNeedsUpdate`), so nothing else needs updating and the status item is reused.
+    func rebind(host: WidgetHost) { self.host = host }
 
     init(host: WidgetHost) {
         self.host = host
