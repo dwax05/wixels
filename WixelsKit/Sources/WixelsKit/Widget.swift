@@ -17,7 +17,7 @@ public protocol Wixel: Sendable {
     static var refresh: RefreshPolicy { get }
     static var interactive: Bool { get }     // does the window receive clicks?
     func sample() async -> Sample            // data source            (= command)
-    @ViewBuilder func render(_ s: Sample, _ palette: Palette) -> Content   // (= render)
+    @MainActor @ViewBuilder func render(_ s: Sample, _ palette: Palette) -> Content   // (= render)
 }
 
 public extension Wixel {
