@@ -68,11 +68,20 @@ public struct ThemeTypography: Sendable, Equatable {
 }
 
 public enum ThemeCardFill: Sendable, Equatable { case color(ThemeColor), regularMaterial }
-public enum ThemeCardShape: Sendable, Equatable { case rectangle, rounded(CGFloat) }
+public enum ThemeShape: Shape, Sendable, Equatable {
+    case rectangle, rounded(CGFloat)
+
+    public func path(in rect: CGRect) -> Path {
+        switch self {
+        case .rectangle: Rectangle().path(in: rect)
+        case .rounded(let radius): RoundedRectangle(cornerRadius: radius, style: .continuous).path(in: rect)
+        }
+    }
+}
 public struct ThemeCard: Sendable, Equatable {
-    public var fill: ThemeCardFill; public var shape: ThemeCardShape
+    public var fill: ThemeCardFill; public var shape: ThemeShape
     public var borderWidth, shadowBlur, shadowX, shadowY, opacity: CGFloat
-    public init(fill: ThemeCardFill, shape: ThemeCardShape, borderWidth: CGFloat = 0,
+    public init(fill: ThemeCardFill, shape: ThemeShape, borderWidth: CGFloat = 0,
                 shadowBlur: CGFloat = 0, shadowX: CGFloat = 0, shadowY: CGFloat = 0, opacity: CGFloat = 1) {
         self.fill = fill; self.shape = shape; self.borderWidth = borderWidth
         self.shadowBlur = shadowBlur; self.shadowX = shadowX; self.shadowY = shadowY; self.opacity = opacity
@@ -86,9 +95,11 @@ public struct ThemeMetrics: Sendable, Equatable {
 }
 public struct ThemeTokens: Sendable, Equatable {
     public var colors: ThemeColors; public var typography: ThemeTypography
-    public var card: ThemeCard; public var metrics: ThemeMetrics
-    public init(colors: ThemeColors, typography: ThemeTypography, card: ThemeCard, metrics: ThemeMetrics = .init()) {
-        self.colors = colors; self.typography = typography; self.card = card; self.metrics = metrics
+    public var card: ThemeCard; public var mediaShape: ThemeShape; public var metrics: ThemeMetrics
+    public init(colors: ThemeColors, typography: ThemeTypography, card: ThemeCard,
+                mediaShape: ThemeShape, metrics: ThemeMetrics = .init()) {
+        self.colors = colors; self.typography = typography; self.card = card
+        self.mediaShape = mediaShape; self.metrics = metrics
     }
 }
 public struct ThemeDefinition: Sendable, Equatable {
@@ -151,35 +162,48 @@ public extension ThemeDefinition {
             accent: .system(.accent), alternateAccent: .system(.alternateAccent), positive: .system(.positive),
             warning: .system(.warning), negative: .system(.negative), muted: .system(.muted), border: .system(.border), shadow: .system(.shadow)),
         typography: .macos, card: .init(fill: .regularMaterial, shape: .rounded(16), borderWidth: 0.5,
-            shadowBlur: 8, shadowY: 3, opacity: 0.96), metrics: .init(spacingScale: 1, paddingScale: 1)))
+            shadowBlur: 8, shadowY: 3, opacity: 0.96), mediaShape: .rounded(8),
+        metrics: .init(spacingScale: 1, paddingScale: 1)))
     static let cynaberii = ThemeDefinition(manifest: .init(id: "cynaberii", name: "Cynaberii"), tokens: .init(
         colors: .init(background: .pywalBackground, foreground: .pywalForeground, secondary: .pywal(6), accent: .pywal(4),
             alternateAccent: .pywal(3), positive: .pywal(2), warning: .pywal(3), negative: .pywal(1), muted: .pywal(8),
             border: .pywal(4), shadow: .pywal(3)), typography: .cynaberii,
         card: .init(fill: .color(.pywalBackground), shape: .rectangle, borderWidth: 4, shadowX: 4, shadowY: 4),
-        metrics: .init(spacingScale: 1, paddingScale: 1)))
+        mediaShape: .rectangle, metrics: .init(spacingScale: 1, paddingScale: 1)))
 }
 
 private struct ThemeCardModifier: ViewModifier {
-    let theme: ThemeContext; let insets: EdgeInsets
+    let theme: ThemeContext; let insets: EdgeInsets; let customFill: Color?
     @ViewBuilder func body(content: Content) -> some View {
         let card = theme.tokens.card
-        let shape = AnyShape(card.shape)
+        let shape = card.shape
         content.padding(insets)
-            .background { if case .regularMaterial = card.fill { shape.fill(.regularMaterial) } else if case .color(let c) = card.fill { shape.fill(theme.resolve(c).opacity(card.opacity)) } }
+            .clipShape(shape)
+            .background {
+                Group {
+                    if let customFill { shape.fill(customFill) }
+                    else if case .regularMaterial = card.fill { shape.fill(.regularMaterial) }
+                    else if case .color(let c) = card.fill { shape.fill(theme.resolve(c).opacity(card.opacity)) }
+                }
+                .shadow(color: theme.color(.shadow).opacity(0.3), radius: card.shadowBlur,
+                        x: card.shadowX, y: card.shadowY)
+            }
             .overlay(shape.stroke(theme.color(.border), lineWidth: card.borderWidth))
-            .shadow(color: theme.color(.shadow).opacity(0.3), radius: card.shadowBlur, x: card.shadowX, y: card.shadowY)
             .padding(.trailing, max(0, card.shadowX)).padding(.bottom, max(0, card.shadowY))
-    }
-    private struct AnyShape: Shape {
-        let card: ThemeCardShape; init(_ card: ThemeCardShape) { self.card = card }
-        func path(in rect: CGRect) -> Path { switch card { case .rectangle: Rectangle().path(in: rect); case .rounded(let r): RoundedRectangle(cornerRadius: r, style: .continuous).path(in: rect) } }
     }
 }
 public extension View {
-    func themedCard(_ theme: ThemeContext, insets: EdgeInsets = .init(top: 14, leading: 16, bottom: 14, trailing: 16)) -> some View {
+    func themedCard(_ theme: ThemeContext, fill: Color? = nil,
+                    insets: EdgeInsets = .init(top: 14, leading: 16, bottom: 14, trailing: 16)) -> some View {
         modifier(ThemeCardModifier(theme: theme, insets: .init(top: insets.top * theme.tokens.metrics.paddingScale,
             leading: insets.leading * theme.tokens.metrics.paddingScale, bottom: insets.bottom * theme.tokens.metrics.paddingScale,
-            trailing: insets.trailing * theme.tokens.metrics.paddingScale)))
+            trailing: insets.trailing * theme.tokens.metrics.paddingScale), customFill: fill))
+    }
+
+    func themedMedia(_ theme: ThemeContext, border: Color, lineWidth: CGFloat) -> some View {
+        let shape = theme.tokens.mediaShape
+        return clipShape(shape).overlay(
+            shape.stroke(border, lineWidth: lineWidth * 2).clipShape(shape)
+        )
     }
 }

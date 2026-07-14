@@ -16,6 +16,12 @@ enum SchedulerTests {
         registrar.add(TestThemeable.spec())
         let native = ThemeDefinition(manifest: .init(id: "native", name: "Native"),
                                      tokens: ThemeDefinition.macos.tokens)
+        try check(native.tokens.card.shape == .rounded(16), "macos theme rounds cards")
+        try check(native.tokens.mediaShape == .rounded(8), "macos theme rounds media")
+        try check(ThemeDefinition.cynaberii.tokens.card.shape == .rectangle,
+                  "cynaberii theme keeps cards square")
+        try check(ThemeDefinition.cynaberii.tokens.mediaShape == .rectangle,
+                  "cynaberii theme keeps media square")
         registrar.add(native)
         let resolved = registrar.resolveThemed(kind: "test", themeID: "native",
                                                services: Services(), options: .empty)

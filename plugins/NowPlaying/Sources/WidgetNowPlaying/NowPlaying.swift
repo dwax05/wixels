@@ -67,7 +67,7 @@ struct NowPlayingView: View {
         }
         .frame(width: 272, alignment: .leading)            // stable right edge (JS fixed width)
         .themedCard(theme)
-        .contentShape(Rectangle())
+        .contentShape(theme.tokens.card.shape)
         .onTapGesture { toggle() }
         .task(id: info.art) { art = decodeArtwork(info.art) }
     }
@@ -82,8 +82,7 @@ struct NowPlayingView: View {
             }
         }
         .frame(width: 56, height: 56)
-        .clipped()
-        .overlay(Rectangle().strokeBorder(sage, lineWidth: 3))
+        .themedMedia(theme, border: sage, lineWidth: 3)
     }
 
     // two static cassette reels

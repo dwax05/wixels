@@ -88,13 +88,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
-let app = NSApplication.shared
-app.setActivationPolicy(.accessory)      // no dock icon, single process
 if CommandLine.arguments.contains("--config-tests") {
     exit(runConfigTestSuite())
 } else if CommandLine.arguments.contains("--layout-tests") {
     exit(runLayoutTestSuite())
+} else if CommandLine.arguments.contains("--plugin-tests") {
+    exit(PluginLoader.runTestSuite())
 } else {
+    let app = NSApplication.shared
+    app.setActivationPolicy(.accessory)      // no dock icon, single process
     let delegate = AppDelegate()
     app.delegate = delegate
     app.run()
