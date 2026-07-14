@@ -18,5 +18,8 @@ let package = Package(
     targets: [
         .target(name: "WidgetStats",
                 dependencies: [.product(name: "WixelsKit", package: "WixelsKit")]),
+        .executableTarget(name: "WidgetStatsTests",
+                          dependencies: ["WidgetStats", .product(name: "WixelsKit", package: "WixelsKit")],
+                          path: "Tests"),
     ]
 )
