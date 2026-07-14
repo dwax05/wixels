@@ -22,6 +22,10 @@ import TOMLKit
 /// One resolved `[[widget]]` block: which widget, how to nudge its placement, and
 /// its options.
 struct ConfigEntry {
+    /// The ordinal of this `[[widget]]` block in the source TOML. This survives
+    /// entries the host cannot mount (for example, a missing plugin), so a drag
+    /// always writes back to the block that produced this entry.
+    let sourceIndex: Int
     let kind: String
     let placement: PlacementOverride
     let options: Options
@@ -54,6 +58,14 @@ struct PlacementOverride {
     }
 }
 
+/// A placement change made by layout edit mode. `anchor == nil` means a normal
+/// drag changed only the offset; reset supplies the plugin's default anchor too.
+struct PlacementChange {
+    let configIndex: Int
+    let anchor: WixelsKit.Anchor?
+    let offset: CGSize
+}
+
 enum Config {
     static var path: String {
         Paths.resolve(env: "WIXELS_CONFIG", config: nil,
@@ -77,9 +89,10 @@ enum Config {
     static func parse(_ text: String) throws -> LoadedConfig {
         let table = try TOMLTable(string: text)
         let paths = table["paths"]?.table
-        let entries: [ConfigEntry] = (table["widget"]?.array).map(Array.init)?.compactMap { item in
+        let entries: [ConfigEntry] = (table["widget"]?.array).map(Array.init)?.enumerated().compactMap { index, item in
             guard let t = item.table, let kind = t["kind"]?.string else { return nil }
-            return ConfigEntry(kind: kind, placement: placement(from: t), options: options(from: t))
+            return ConfigEntry(sourceIndex: index, kind: kind,
+                               placement: placement(from: t), options: options(from: t))
         } ?? []
         return LoadedConfig(entries: entries,
                             colors: paths?["colors"]?.string,
@@ -116,6 +129,31 @@ enum Config {
         if let s = v.string { return .string(s) }
         if let arr = v.array { return .array(Array(arr).compactMap { optionValue($0) }) }
         return nil
+    }
+
+    /// Persist dragged positions by regenerating the TOML from its parsed document.
+    /// This deliberately trades comments/formatting for a simple, reliable write path
+    /// while retaining every parsed table, option, and unknown field.
+    static func writePlacements(_ changes: [PlacementChange]) {
+        guard !changes.isEmpty,
+              let text = try? String(contentsOfFile: path, encoding: .utf8),
+              let table = try? TOMLTable(string: text),
+              let widgets = table["widget"]?.array else { return }
+        for change in changes {
+            let index = change.configIndex
+            guard index >= 0, index < widgets.count,
+                  let widget = widgets[index]?.table else { continue }
+            if let anchor = change.anchor { widget["anchor"] = anchor.rawValue }
+            let value = TOMLArray()
+            value.append(Int(change.offset.width))
+            value.append(Int(change.offset.height))
+            widget["offset"] = value
+        }
+
+        let out = table.convert(to: .toml)
+        if (try? out.write(toFile: path, atomically: true, encoding: .utf8)) == nil {
+            Log.note("failed to write offsets to \(path)")
+        }
     }
 
     private static func num(_ v: TOMLValueConvertible) -> CGFloat {

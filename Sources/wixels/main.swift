@@ -43,7 +43,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             let placement = entry.placement.apply(to: spec.defaultPlacement)
             let mountable = spec.build(services, entry.options)
-            host.mount(mountable, placement: placement)
+            host.mount(mountable, placement: placement, defaultPlacement: spec.defaultPlacement,
+                       configIndex: entry.sourceIndex)
         }
         host.run()
         self.host = host
@@ -55,6 +56,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 let app = NSApplication.shared
 app.setActivationPolicy(.accessory)      // no dock icon, single process
-let delegate = AppDelegate()
-app.delegate = delegate
-app.run()
+if CommandLine.arguments.contains("--layout-tests") {
+    exit(runLayoutTestSuite())
+} else {
+    let delegate = AppDelegate()
+    app.delegate = delegate
+    app.run()
+}

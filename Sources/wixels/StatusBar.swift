@@ -35,6 +35,18 @@ final class StatusBarController: NSObject, NSMenuDelegate {
             menu.addItem(row)
         }
         menu.addItem(.separator())
+        let edit = NSMenuItem(title: "Edit Layout",
+                              action: #selector(toggleEdit(_:)),
+                              keyEquivalent: "")
+        edit.state = host.editing ? .on : .off
+        edit.target = self
+        menu.addItem(edit)
+        let reset = NSMenuItem(title: "Reset Layout",
+                               action: #selector(resetLayout(_:)),
+                               keyEquivalent: "")
+        reset.target = self
+        menu.addItem(reset)
+        menu.addItem(.separator())
         let quit = NSMenuItem(title: "Quit wixels",
                               action: #selector(NSApplication.terminate(_:)),
                               keyEquivalent: "q")
@@ -43,5 +55,13 @@ final class StatusBarController: NSObject, NSMenuDelegate {
 
     @objc private func toggle(_ sender: NSMenuItem) {
         host.setEnabled(sender.state != .on, at: sender.tag)
+    }
+
+    @objc private func toggleEdit(_ sender: NSMenuItem) {
+        host.setEditMode(!host.editing)
+    }
+
+    @objc private func resetLayout(_ sender: NSMenuItem) {
+        host.resetLayout()
     }
 }
