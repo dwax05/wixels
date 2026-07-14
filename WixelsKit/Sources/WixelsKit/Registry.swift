@@ -57,17 +57,20 @@ public final class Registrar: @unchecked Sendable {
     private var warnedThemeIDs = Set<String>()
     public init() { themes[ThemeDefinition.macos.manifest.id] = .macos }
 
+    private func logDuplicate(_ kind: String) {
+        Log.note("duplicate widget kind '\(kind)' — keeping the first")
+    }
+
     public func add(_ spec: WidgetSpec) {
         if specs[spec.kind] != nil || themedSpecs[spec.kind] != nil {
-            Log.note("duplicate widget kind '\(spec.kind)' — keeping the first")
-            return
+            logDuplicate(spec.kind); return
         }
         specs[spec.kind] = spec
     }
 
     public func add(_ spec: ThemedWidgetSpec) {
         if themedSpecs[spec.kind] != nil || specs[spec.kind] != nil {
-            Log.note("duplicate widget kind '\(spec.kind)' — keeping the first"); return
+            logDuplicate(spec.kind); return
         }
         themedSpecs[spec.kind] = spec
     }

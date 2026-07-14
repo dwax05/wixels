@@ -103,9 +103,8 @@ enum Config {
     }
 
     private static func validThemeID(_ id: String?) -> String? {
-        guard let id, !id.isEmpty,
-              id.range(of: "^[a-z0-9]+(?:-[a-z0-9]+)*$", options: .regularExpression) != nil else {
-            if let id { Log.note("invalid theme id '\(id)' — ignoring") }
+        guard let id, ThemeManifest.isValidID(id) else {
+            if let id, !id.isEmpty { Log.note("invalid theme id '\(id)' — ignoring") }
             return nil
         }
         return id
