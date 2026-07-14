@@ -41,13 +41,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 let placement = entry.placement.apply(to: spec.defaultPlacement)
                 host.mount(spec.build(services, entry.options), placement: placement,
                            defaultPlacement: spec.defaultPlacement, configIndex: entry.sourceIndex)
-            } else if registrar.themedSpecs[entry.kind] != nil {
-                let selected = entry.theme ?? cfg.theme ?? "macos"
-                guard let resolved = registrar.resolveThemed(kind: entry.kind,
-                    themeID: selected,
-                    services: services, options: entry.options) else {
-                    Log.note("no widget for kind '\(entry.kind)'"); continue
-                }
+            } else if registrar.themedSpecs[entry.kind] != nil,
+                      let resolved = registrar.resolveThemed(kind: entry.kind,
+                          themeID: entry.theme ?? cfg.theme ?? "macos",
+                          services: services, options: entry.options) {
                 let placement = entry.placement.apply(to: resolved.placement)
                 host.mount(resolved.widget, placement: placement, defaultPlacement: resolved.placement,
                            configIndex: entry.sourceIndex)

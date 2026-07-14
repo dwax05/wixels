@@ -70,6 +70,10 @@ Edit `~/.config/wixels/desktop.toml` (override the path with `WIXELS_CONFIG`). E
 fields are optional — omit them to use the widget's built-in default. Config is read
 once at launch.
 
+One exception writes the file back: dragging a widget in the menu-bar layout editor and
+saving persists its new `offset` by regenerating `desktop.toml`. Every widget block,
+option, and unknown field is retained, but comments and hand-formatting are dropped.
+
 ```toml
 [theme]
 default = "macos" # optional: macos is also the default when this table is absent

@@ -63,12 +63,18 @@ private struct Mount {
     let makeView: (PaletteStore) -> AnyView
     var window: NSWindow?
     var enabled: Bool = true   // false = user turned it off from the menu bar
-    // Saved window state while in edit mode, restored on exit.
-    var savedAnchor: WixelsKit.Anchor?
-    var savedOffset: CGSize?
-    var savedFrameOrigin: NSPoint?
-    var savedLevel: NSWindow.Level?
-    var savedIgnoresMouse: Bool?
+    // Non-nil only while in edit mode; captures the pre-edit state restored on exit.
+    var editState: EditState?
+}
+
+/// The widget/window state captured when edit mode begins, restored if the user discards.
+/// `anchor`/`offset` are captured for every mount; the window fields only when it has one.
+struct EditState {
+    var anchor: WixelsKit.Anchor
+    var offset: CGSize
+    var frameOrigin: NSPoint?
+    var level: NSWindow.Level?
+    var ignoresMouse: Bool?
 }
 
 /// A menu-bar-facing summary of one mounted widget: enough to draw a checkmark
@@ -197,8 +203,7 @@ final class WidgetHost {
         editing = true
         movedConfigIndexes.removeAll()
         for i in mounts.indices {
-            mounts[i].savedAnchor = mounts[i].anchor
-            mounts[i].savedOffset = mounts[i].offset
+            mounts[i].editState = EditState(anchor: mounts[i].anchor, offset: mounts[i].offset)
             enterEdit(&mounts[i])
         }
         installEditKeyCapture()
@@ -270,9 +275,9 @@ final class WidgetHost {
 
     private func enterEdit(_ m: inout Mount) {
         guard m.enabled, let w = m.window else { return }
-        m.savedFrameOrigin = w.frame.origin
-        m.savedLevel = w.level
-        m.savedIgnoresMouse = w.ignoresMouseEvents
+        m.editState?.frameOrigin = w.frame.origin
+        m.editState?.level = w.level
+        m.editState?.ignoresMouse = w.ignoresMouseEvents
         w.ignoresMouseEvents = false
         (w.contentView as? LayoutHostingView<AnyView>)?.layoutEditing = true
         w.level = .floating           // come forward so desktop-level widgets are clickable
@@ -291,12 +296,12 @@ final class WidgetHost {
     /// moved; when discarding, snap the window back to its pre-edit position and return nil.
     @discardableResult
     private func exitEdit(_ m: inout Mount, save: Bool, commitOffset: Bool = true) -> CGSize? {
-        if !save {
-            if let anchor = m.savedAnchor { m.anchor = anchor }
-            if let offset = m.savedOffset { m.offset = offset }
+        if !save, let s = m.editState {
+            m.anchor = s.anchor
+            m.offset = s.offset
         }
         guard let w = m.window else {
-            m.savedAnchor = nil; m.savedOffset = nil; m.savedFrameOrigin = nil
+            m.editState = nil
             return nil
         }
         let base = anchoredBase(anchor: m.anchor, size: m.size)
@@ -304,21 +309,20 @@ final class WidgetHost {
         let newOffset = CGSize(width: (o.x - base.x).rounded(), height: (o.y - base.y).rounded())
 
         (w.contentView as? LayoutHostingView<AnyView>)?.layoutEditing = false
-        if let lvl = m.savedLevel { w.level = lvl }
-        if let ig = m.savedIgnoresMouse { w.ignoresMouseEvents = ig }
-        m.savedLevel = nil; m.savedIgnoresMouse = nil
+        if let lvl = m.editState?.level { w.level = lvl }
+        if let ig = m.editState?.ignoresMouse { w.ignoresMouseEvents = ig }
         if let host = w.contentView {
             host.layer?.borderWidth = 0
             host.layer?.backgroundColor = nil
         }
 
         if !save {
-            if let origin = m.savedFrameOrigin { w.setFrameOrigin(origin) }
-            m.savedAnchor = nil; m.savedOffset = nil; m.savedFrameOrigin = nil
+            if let origin = m.editState?.frameOrigin { w.setFrameOrigin(origin) }
+            m.editState = nil
             if m.enabled { w.orderFront(nil) }
             return nil
         }
-        m.savedAnchor = nil; m.savedOffset = nil; m.savedFrameOrigin = nil
+        m.editState = nil
         if m.enabled { w.orderFront(nil) }
         guard commitOffset, newOffset != m.offset else { return nil }
         m.offset = newOffset
