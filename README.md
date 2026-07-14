@@ -43,7 +43,7 @@ every widget enabled. Widgets sit behind your app windows — bring your desktop
 
 All twelve bundled widgets own one canonical content tree, sampling policy, interactions,
 and placement. Themes are universal token packages: they change semantic colors,
-typography, card fill/shape/border/shadow, and spacing density without replacing content.
+typography, card fill/shape/border/shadow, media shape, and spacing density without replacing content.
 `macos` uses system colors, typography, regular material, rounded cards, and automatic
 light/dark adaptation. `cynaberii` uses Silkscreen, the live pywal palette, square panes,
 accent borders, and offset shadows.
@@ -144,8 +144,9 @@ host.
 ## Writing a theme
 
 Theme dylibs provide one universal `ThemeDefinition`. Copy `themes/Template`, register a
-stable lowercase-kebab-case manifest plus `ThemeTokens`, and rebuild with
-`./build-plugins.sh`. User themes may be installed in `~/.config/wixels/themes/`.
+stable lowercase-kebab-case manifest plus `ThemeTokens` (including card and media shapes),
+and rebuild with `./build-plugins.sh`. User themes may be installed in
+`~/.config/wixels/themes/`.
 
 ```swift
 registrar.add(ThemeDefinition(

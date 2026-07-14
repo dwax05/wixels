@@ -210,8 +210,8 @@ private struct PosterView: View {
             .padding(.top, 12)
         }
         .frame(width: Poster.artW)
-        .background(cp.paper)
-        .themedCard(theme, insets: .init(top: 12, leading: 12, bottom: 11, trailing: 12))
+        .themedCard(theme, fill: cp.paper,
+                    insets: .init(top: 12, leading: 12, bottom: 11, trailing: 12))
         .task(id: info.art) {
             let b64 = info.art
             art = decodeArtwork(b64)                 // cheap decode, fine on main
@@ -232,8 +232,7 @@ private struct PosterView: View {
             }
         }
         .frame(width: Poster.artW, height: Poster.artW)
-        .clipped()
-        .overlay(Rectangle().strokeBorder(cp.frame, lineWidth: 4))
+        .themedMedia(theme, border: cp.frame, lineWidth: 4)
     }
 
     private func icon(_ name: String, _ color: Color, _ action: (() -> Void)? = nil) -> some View {

@@ -55,4 +55,23 @@ enum PluginLoader {
         let register = unsafeBitCast(sym, to: RegisterFn.self)
         register(Unmanaged.passUnretained(registrar).toOpaque())
     }
+
+    static func runTestSuite() -> Int32 {
+        let registrar = Registrar()
+        load(into: registrar)
+        let expected: Set<String> = ["sys", "nowplaying", "disk-snail", "pet", "plant", "quotes",
+                                     "frog", "clock", "stats", "owl", "weather", "poster"]
+        let loaded = Set(registrar.specs.keys).union(registrar.themedSpecs.keys)
+        let missing = expected.subtracting(loaded)
+        guard missing.isEmpty else {
+            print("FAIL bundled plugins did not load: \(missing.sorted().joined(separator: ", "))")
+            return 1
+        }
+        guard registrar.themes["macos"] != nil, registrar.themes["cynaberii"] != nil else {
+            print("FAIL bundled themes did not load")
+            return 1
+        }
+        print("PASS 12 bundled plugins and 2 themes load at runtime")
+        return 0
+    }
 }
