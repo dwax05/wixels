@@ -25,9 +25,8 @@ public final class PaletteStore: ObservableObject, @unchecked Sendable {
     private var fd: Int32 = -1
 
     public init(colorsPath: String? = nil) {
-        file = ProcessInfo.processInfo.environment["WIXELS_COLORS"]
-            ?? colorsPath
-            ?? ("~/.cache/wal/colors.json" as NSString).expandingTildeInPath
+        file = Paths.resolve(env: "WIXELS_COLORS", config: colorsPath,
+                             default: "~/.cache/wal/colors.json")
         reload()
         watch()
     }

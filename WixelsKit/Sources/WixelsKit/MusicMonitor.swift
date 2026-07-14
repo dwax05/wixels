@@ -80,9 +80,8 @@ public final class MusicMonitor: @unchecked Sendable {
     private let npCLI = "/opt/homebrew/bin/nowplaying-cli"
 
     public init(cachePath: String? = nil) {
-        cache = ProcessInfo.processInfo.environment["WIXELS_NOWPLAYING"]
-            ?? cachePath
-            ?? ("~/.cache/wixels/nowplaying.json" as NSString).expandingTildeInPath
+        cache = Paths.resolve(env: "WIXELS_NOWPLAYING", config: cachePath,
+                              default: "~/.cache/wixels/nowplaying.json")
     }
 
     /// True when something is actively playing (playbackRate > 0).

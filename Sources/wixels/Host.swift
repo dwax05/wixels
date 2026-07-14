@@ -33,9 +33,15 @@ private struct Mount {
     let interactive: Bool
     let zBoost: Int          // nudges the window level up so it stacks above peers
     let align: Alignment?    // pins content to a window edge (else NSHostingView centers)
+    let kind: String
     let makeView: (PaletteStore) -> AnyView
     var window: NSWindow?
+    var enabled: Bool = true   // false = user turned it off from the menu bar
 }
+
+/// A menu-bar-facing summary of one mounted widget: enough to draw a checkmark
+/// row and route a toggle back by index. `label` disambiguates duplicate kinds.
+struct WidgetInfo { let index: Int; let kind: String; let label: String; let enabled: Bool }
 
 @MainActor
 final class WidgetHost {
@@ -54,9 +60,40 @@ final class WidgetHost {
             ticker: widget.makeTicker(),
             anchor: p.anchor, offset: p.offset, size: p.size,
             interactive: widget.interactive, zBoost: p.zBoost, align: p.align,
+            kind: widget.kind,
             makeView: { widget.makeView($0) }
         ))
         return self
+    }
+
+    /// The mounted widgets in menu order, each labelled for display. Duplicate
+    /// kinds get a `#2`, `#3` suffix so the menu can tell two clocks apart.
+    func widgetInfos() -> [WidgetInfo] {
+        var seen: [String: Int] = [:]
+        return mounts.indices.map { i in
+            let kind = mounts[i].kind
+            let n = (seen[kind] ?? 0) + 1
+            seen[kind] = n
+            let label = n == 1 ? kind : "\(kind) #\(n)"
+            return WidgetInfo(index: i, kind: kind, label: label, enabled: mounts[i].enabled)
+        }
+    }
+
+    /// Turn a widget on/off from the menu bar. Off = hide the window and gate its
+    /// ticker so the scheduler stops sampling it; on = reveal it and catch its
+    /// sample up (mirrors the occlusion re-arm). Session-only — no config write.
+    func setEnabled(_ on: Bool, at index: Int) {
+        guard mounts.indices.contains(index) else { return }
+        mounts[index].enabled = on
+        let ticker = mounts[index].ticker
+        if on {
+            mounts[index].window?.orderFront(nil)
+            ticker.active = true
+            Task { await ticker.tick() }
+        } else {
+            mounts[index].window?.orderOut(nil)
+            ticker.active = false
+        }
     }
 
     private var occlusionObserver: (any NSObjectProtocol)?
@@ -95,6 +132,8 @@ final class WidgetHost {
             MainActor.assumeIsolated {
                 guard let self, let win,
                       let i = self.mounts.firstIndex(where: { $0.window === win }) else { return }
+                // A user-disabled widget stays off — don't let occlusion re-arm it.
+                guard self.mounts[i].enabled else { return }
                 let ticker = self.mounts[i].ticker
                 let visible = win.occlusionState.contains(.visible)
                 let wasActive = ticker.active

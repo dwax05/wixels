@@ -43,19 +43,15 @@ enum PluginLoader {
     private static func loadOne(_ path: String, into registrar: Registrar) {
         guard let handle = dlopen(path, RTLD_NOW) else {
             let err = dlerror().map { String(cString: $0) } ?? "unknown error"
-            warn("dlopen failed for \(path): \(err)")
+            Log.note("dlopen failed for \(path): \(err)")
             return
         }
         guard let sym = dlsym(handle, "wixels_register") else {
-            warn("no wixels_register in \(path) — not a widget plugin?")
+            Log.note("no wixels_register in \(path) — not a widget plugin?")
             return
         }
         typealias RegisterFn = @convention(c) (UnsafeMutableRawPointer) -> Void
         let register = unsafeBitCast(sym, to: RegisterFn.self)
         register(Unmanaged.passUnretained(registrar).toOpaque())
-    }
-
-    private static func warn(_ msg: String) {
-        FileHandle.standardError.write(Data("wixels: \(msg)\n".utf8))
     }
 }

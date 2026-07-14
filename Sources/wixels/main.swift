@@ -18,6 +18,7 @@ import WixelsKit
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var host: WidgetHost!
+    private var statusBar: StatusBarController!
 
     func applicationDidFinishLaunching(_ note: Notification) {
         // Read the TOML layout (scaffolds a default on first run). Its `[paths]` feed
@@ -37,7 +38,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // same-level widgets — frog before clock).
         for entry in cfg.entries {
             guard let spec = registrar.specs[entry.kind] else {
-                FileHandle.standardError.write(Data("wixels: no widget for kind '\(entry.kind)'\n".utf8))
+                Log.note("no widget for kind '\(entry.kind)'")
                 continue
             }
             let placement = entry.placement.apply(to: spec.defaultPlacement)
@@ -46,6 +47,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         host.run()
         self.host = host
+
+        // Menu bar presence: shows the app is up and toggles widgets at runtime.
+        self.statusBar = StatusBarController(host: host)
     }
 }
 
