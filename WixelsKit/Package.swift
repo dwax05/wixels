@@ -14,5 +14,10 @@ let package = Package(
     ],
     targets: [
         .target(name: "WixelsKit"),
+        .executableTarget(
+            name: "WixelsKitTests",
+            dependencies: ["WixelsKit"],
+            path: "Tests/WixelsKitTests"
+        ),
     ]
 )

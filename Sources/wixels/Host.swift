@@ -86,7 +86,7 @@ struct LayoutSnapshot: Equatable {
 final class WidgetHost {
     let palette: PaletteStore
     private var mounts: [Mount] = []
-    private let scheduler = Scheduler()
+    private let scheduler = WixelsKit.Scheduler()
     private let placementWriter: ([PlacementChange]) -> Void
     /// Freeze the coordinate system for this host lifetime. AppKit can change which
     /// screen is `main` while edit mode activates the accessory app; using that live
@@ -446,48 +446,4 @@ final class WidgetHost {
         }
         return NSPoint(x: x, y: y)
     }
-}
-
-/// One shared scheduler for every widget — not N timers. `.interval` widgets are
-/// coalesced onto a single 1s base loop that ticks each when its period elapses;
-/// `.idleStatic` ticks once.
-@MainActor
-final class Scheduler {
-    private struct Periodic { let ticker: any WidgetTicker; let period: TimeInterval; var last: Date }
-    private var periodics: [Periodic] = []
-    private var once: [any WidgetTicker] = []
-    private var loop: Task<Void, Never>?
-
-    func add(_ t: any WidgetTicker) {
-        switch t.refresh {
-        case .interval(let p): periodics.append(.init(ticker: t, period: p, last: .distantPast))
-        case .idleStatic:      once.append(t)
-        }
-    }
-
-    /// Re-tick every idleStatic widget — driven by the host on a palette change,
-    /// the one refresh trigger idleStatic widgets get after their launch sample.
-    func refreshOnce() {
-        for t in once where t.active { Task { await t.tick() } }
-    }
-
-    func start() {
-        for t in once { Task { await t.tick() } }
-        guard !periodics.isEmpty else { return }
-        loop = Task { [weak self] in
-            while !Task.isCancelled {
-                let now = Date()
-                guard let self else { return }
-                for i in self.periodics.indices where
-                    self.periodics[i].ticker.active &&
-                    now.timeIntervalSince(self.periodics[i].last) >= self.periodics[i].period {
-                    self.periodics[i].last = now
-                    await self.periodics[i].ticker.tick()
-                }
-                try? await Task.sleep(for: .seconds(1))
-            }
-        }
-    }
-
-    deinit { loop?.cancel() }
 }

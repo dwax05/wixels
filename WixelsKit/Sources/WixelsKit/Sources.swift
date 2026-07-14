@@ -142,9 +142,9 @@ public struct PetState: Equatable, Sendable {
 
 /// Composes several native readings into the pet's mood, mirroring pet.py's
 /// state machine — but with syscalls instead of `top`/`netstat`/`pmset` spawns.
-/// @unchecked Sendable: mutable `prevNet` is only touched inside `read()`, which
-/// the scheduler calls serially.
-public final class PetSource: DataSource, @unchecked Sendable {
+/// An actor because lifecycle-triggered refreshes can overlap the scheduler loop;
+/// serial isolation protects the network-delta state across suspended reads.
+public actor PetSource: DataSource {
     private let cpu: CPUSource
     private let music: MusicMonitor
     private var prevNet: (t: Date, bytes: UInt64)?

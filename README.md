@@ -104,11 +104,15 @@ A widget is a small Swift package producing a `libWidget<Name>.dylib`. Copy the 
 cp -r plugins/Template plugins/MyThing
 ```
 
-Then edit `plugins/MyThing/Sources/WidgetMyThing/` — implement two methods, `sample()`
-(fetch data) and `render(_:_:)` (a pure function of your sample + the palette) — build
-with `./build-plugins.sh`, and add a `[[widget]] kind = "my-thing"` block to your TOML.
+Then edit `plugins/MyThing/Sources/WidgetMyThing/` — implement `spec()` (registration,
+defaults, and construction), `sample()` (fetch data), and `render(_:_:)` (construct the
+view from your sample + palette) — build with `./build-plugins.sh`, and add a
+`[[widget]] kind = "my-thing"` block to your TOML.
 You never touch the host: it supplies the window, desktop pinning, palette, scheduler,
-and occlusion pause. See `plugins/Template/` for the fully-commented starting point.
+and occlusion pause. Passive widgets should render deterministically from the supplied
+sample and palette. Interactive widgets may keep local UI state or invoke explicit
+user actions, but should not perform scheduled sampling from `render`. See
+`plugins/Template/` for the fully-commented starting point.
 
 Third-party plugins can be dropped into `~/.config/wixels/plugins/` and loaded without
 rebuilding the core — build them with the **same Swift toolchain** as wixels (Swift has

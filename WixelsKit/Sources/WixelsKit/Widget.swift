@@ -1,5 +1,5 @@
-// Widget — the external seam a plugin author implements. Two methods: how to get
-// data (`sample`) and how to draw it (`render`). Everything else — window,
+// Widget — the external seam a plugin author implements: registration (`spec`),
+// data acquisition (`sample`), and view construction (`render`). Everything else — window,
 // desktop pinning, scheduling, occlusion pause — lives behind the host.
 //
 // This is the plugin ABI, so the shared contracts are `public`. A plugin links
@@ -16,6 +16,7 @@ public protocol Wixel: Sendable {
     static var kind: String { get }          // stable id — config + debug
     static var refresh: RefreshPolicy { get }
     static var interactive: Bool { get }     // does the window receive clicks?
+    static func spec() -> WidgetSpec         // registration + placement + construction
     func sample() async -> Sample            // data source            (= command)
     @MainActor @ViewBuilder func render(_ s: Sample, _ palette: Palette) -> Content   // (= render)
 }
@@ -40,8 +41,9 @@ public protocol DataSource: Sendable {
 //
 // `associatedtype Sample` blocks `any Widget`. A widget is erased to what the host
 // needs: `kind`/`refresh`/`interactive`, a `tick()`-able data model, and a SwiftUI
-// view bound to that same model. The `Sample` type stays private, so `render` stays
-// a pure function of (Sample, Palette) and remains snapshot-testable.
+// view bound to that same model. The `Sample` type stays private. Passive widgets
+// can render deterministically from (Sample, Palette); interactive views may own
+// local UI state or invoke explicit user actions after construction.
 
 @MainActor
 public protocol WidgetTicker: AnyObject {
