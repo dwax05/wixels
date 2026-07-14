@@ -77,7 +77,7 @@ extension Config {
     # kind = "stats"
     # anchor = "bottomLeft"
     # offset = [20, 36]
-    # size = [220, 150]
+    # size = [220, 164]
     # align = "leading"
     """
 }
