@@ -37,14 +37,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Mount each enabled entry in file order (order sets z-stacking among
         // same-level widgets — frog before clock).
         for entry in cfg.entries {
-            guard let spec = registrar.specs[entry.kind] else {
+            if let spec = registrar.specs[entry.kind] {
+                let placement = entry.placement.apply(to: spec.defaultPlacement)
+                host.mount(spec.build(services, entry.options), placement: placement,
+                           defaultPlacement: spec.defaultPlacement, configIndex: entry.sourceIndex)
+            } else if registrar.themedSpecs[entry.kind] != nil {
+                let selected = entry.theme ?? cfg.theme ?? "macos"
+                guard let resolved = registrar.resolveThemed(kind: entry.kind,
+                    themeID: selected,
+                    services: services, options: entry.options) else {
+                    Log.note("no widget for kind '\(entry.kind)'"); continue
+                }
+                let placement = entry.placement.apply(to: resolved.placement)
+                host.mount(resolved.widget, placement: placement, defaultPlacement: resolved.placement,
+                           configIndex: entry.sourceIndex)
+            } else {
                 Log.note("no widget for kind '\(entry.kind)'")
-                continue
             }
-            let placement = entry.placement.apply(to: spec.defaultPlacement)
-            let mountable = spec.build(services, entry.options)
-            host.mount(mountable, placement: placement, defaultPlacement: spec.defaultPlacement,
-                       configIndex: entry.sourceIndex)
         }
         host.run()
         self.host = host
@@ -56,7 +65,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 let app = NSApplication.shared
 app.setActivationPolicy(.accessory)      // no dock icon, single process
-if CommandLine.arguments.contains("--layout-tests") {
+if CommandLine.arguments.contains("--config-tests") {
+    exit(runConfigTestSuite())
+} else if CommandLine.arguments.contains("--layout-tests") {
     exit(runLayoutTestSuite())
 } else {
     let delegate = AppDelegate()

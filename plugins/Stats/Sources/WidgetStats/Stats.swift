@@ -7,17 +7,17 @@
 import SwiftUI
 import WixelsKit
 
-struct Stats: Wixel {
+struct Stats: ThemeableWixel {
     let source: StatsSource
 
     static let kind = "stats"
 
     /// Default placement + wiring for the desktop config. See Registry.swift.
-    static func spec() -> WidgetSpec {
-        WidgetSpec(kind: kind,
+    static func spec() -> ThemedWidgetSpec {
+        ThemedWidgetSpec(widget: Self.self,
             defaultPlacement: .init(anchor: .bottomRight, offset: .init(width: 0, height: 36),
                                     size: .init(width: 220, height: 150), align: .trailing),
-            build: { s, _ in erase(Stats(source: StatsSource(cpu: s.cpu))) })
+            build: { s, _ in Stats(source: StatsSource(cpu: s.cpu)) })
     }
     static let refresh: RefreshPolicy = .interval(20)
     static let px: CGFloat = 6
@@ -69,49 +69,47 @@ struct Stats: Wixel {
     }
 
     func sample() async -> StatsInfo { await source.read() }
-    func render(_ s: StatsInfo, _ p: Palette) -> some View { StatsView(s: s, p: p) }
+    func render(_ sample: StatsInfo, _ theme: ThemeContext) -> some View { StatsView(s: sample, theme: theme) }
 }
 
-private struct StatsView: View {
+struct StatsView: View {
     let s: StatsInfo
-    let p: Palette
+    let theme: ThemeContext
 
     var body: some View {
-        let ink = p.foreground.color
-        let leaf = [p.c(6), p.c(5), p.c(2), p.c(1)][s.wilt].color
+        let ink = theme.color(.foreground)
+        let wilt = s.cpu < 25 ? 0 : s.cpu < 50 ? 1 : s.cpu < 75 ? 2 : 3
+        let leaf = [theme.color(.positive), theme.color(.secondary), theme.color(.warning), theme.color(.negative)][wilt]
         let plantPal: [Character: Color] = [
             "l": leaf, "s": leaf,
-            "r": p.c(4).color,          // pot rim
-            "p": p.c(3).color,          // pot body
-            "m": p.c(5).color,          // wet soil
-            "d": p.c(0).color,          // dry soil
-            "e": p.background.color,     // face cut-out
+            "r": theme.color(.accent), "p": theme.color(.alternateAccent),
+            "m": theme.color(.secondary), "d": theme.color(.muted),
+            "e": theme.color(.background),
         ]
         let blush = s.charging || s.plugged
         let heartPal: [Character: Color] = [
-            "F": (s.charging ? p.c(2) : p.c(4)).color,
-            "E": p.c(8).color,          // dim
-            "b": p.c(3).color,
+            "F": theme.color(s.charging ? .positive : .accent),
+            "E": theme.color(.muted), "b": theme.color(.alternateAccent),
         ]
         let spriteH = 15 * Stats.px      // plant is the tallest sprite
 
         return HStack(alignment: .bottom, spacing: 20) {
             VStack(spacing: 6) {
                 bottomBox(spriteH) {
-                    PixelStrip(frames: [Stats.plant(wilt: s.wilt, mem: s.mem)], px: Stats.px, palette: plantPal)
+                    PixelStrip(frames: [Stats.plant(wilt: wilt, mem: s.mem)], px: Stats.px, palette: plantPal)
                 }
                 label("cpu", s.cpu, leaf, ink)
-                label("mem", s.mem, p.c(5).color, ink)
+                label("mem", s.mem, theme.color(.secondary), ink)
             }
             VStack(spacing: 6) {
                 bottomBox(spriteH) {
                     PixelStrip(frames: [Stats.heart(pct: s.battery, blush: blush)], px: Stats.px, palette: heartPal)
                 }
-                label("batt", s.battery, p.c(4).color, ink)
+                label("batt", s.battery, theme.color(.accent), ink)
             }
         }
         .fixedSize()   // hug the sprites; don't stretch to the window
-        .pane(p, insets: .init(top: 14, leading: 18, bottom: 14, trailing: 18))
+        .themedCard(theme, insets: .init(top: 14, leading: 18, bottom: 14, trailing: 18))
     }
 
     private func bottomBox<V: View>(_ h: CGFloat, @ViewBuilder _ content: () -> V) -> some View {
@@ -120,6 +118,6 @@ private struct StatsView: View {
 
     private func label(_ t: String, _ v: Int, _ tColor: Color, _ ink: Color) -> some View {
         (Text(t + " ").foregroundColor(tColor) + Text("\(v)%").foregroundColor(ink))
-            .font(.pixel(9))
+            .font(theme.font(.label))
     }
 }

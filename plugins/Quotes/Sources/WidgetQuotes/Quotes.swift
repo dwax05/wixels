@@ -54,44 +54,42 @@ struct QuoteSource: Sendable {
     }
 }
 
-struct Quotes: Wixel {
+struct Quotes: ThemeableWixel {
     let source: QuoteSource
 
     static let kind = "quotes"
 
     /// Default placement + wiring for the desktop config. See Registry.swift.
-    static func spec() -> WidgetSpec {
-        WidgetSpec(kind: kind,
+    static func spec() -> ThemedWidgetSpec {
+        ThemedWidgetSpec(widget: Self.self,
             defaultPlacement: .init(anchor: .bottomLeft, offset: .init(width: 300, height: 90),
                                     size: .init(width: 250, height: 150)),
-            build: { _, opts in erase(Quotes(source: QuoteSource(path: opts.string("path")))) })
+            build: { _, opts in Quotes(source: QuoteSource(path: opts.string("path"))) })
     }
     static let refresh: RefreshPolicy = .idleStatic
     static let interactive = true
 
     func sample() async -> String { source.random() }
 
-    func render(_ s: String, _ p: Palette) -> some View {
-        QuotesView(initial: s, source: source, p: p)
+    func render(_ s: String, _ theme: ThemeContext) -> some View {
+        QuotesView(initial: s, source: source, theme: theme)
     }
 }
 
 private struct QuotesView: View {
     let initial: String
     let source: QuoteSource
-    let p: Palette
+    let theme: ThemeContext
     @State private var quote: String?
 
     private func line(_ s: String) -> some View {
-        (Text("“ ").foregroundColor(p.c(4).color) + Text(s).foregroundColor(p.foreground.color))
-            .font(.pixel(11))
+        (Text("“ ").foregroundColor(theme.color(.accent)) + Text(s).foregroundColor(theme.color(.foreground)))
+            .font(theme.font(.body))
             .lineSpacing(4)
             .frame(maxWidth: QuoteSource.maxWidth, alignment: .leading)
     }
 
     var body: some View {
-        let accent = p.c(4).color, accent2 = p.c(3).color
-        let panel = p.background.mix(p.foreground, 0.06).color   // faint bubble fill
         let text = quote ?? initial
 
         // Reserve the height of the tallest quote so the bubble never resizes on
@@ -101,9 +99,7 @@ private struct QuotesView: View {
             line(source.tallest).opacity(0)
             line(text)
         }
-            .padding(.init(top: 12, leading: 14, bottom: 12, trailing: 14))
-            // bubble body: faint panel in the shared frame (thinner border, bigger shadow)
-            .framedPane(border: accent, shadow: accent2, fill: panel, borderW: 3, shadowOffset: 5)
+            .themedCard(theme, insets: .init(top: 12, leading: 14, bottom: 12, trailing: 14))
             .contentShape(Rectangle())
             .onTapGesture { quote = source.random() }
     }

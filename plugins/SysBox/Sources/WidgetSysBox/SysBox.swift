@@ -8,17 +8,17 @@
 import SwiftUI
 import WixelsKit
 
-struct SysBox: Wixel {
+struct SysBox: ThemeableWixel {
     let source: SysSource
 
     static let kind = "sys"
 
     /// Default placement + wiring for the desktop config. See Registry.swift.
-    static func spec() -> WidgetSpec {
-        WidgetSpec(kind: kind,
+    static func spec() -> ThemedWidgetSpec {
+        ThemedWidgetSpec(widget: Self.self,
             defaultPlacement: .init(anchor: .topLeft, offset: .init(width: 40, height: -60),
                                     size: .init(width: 180, height: 120)),
-            build: { _, _ in erase(SysBox(source: SysSource())) })
+            build: { _, _ in SysBox(source: SysSource()) })
     }
     static let refresh: RefreshPolicy = .interval(30)
     static let px: CGFloat = 4
@@ -63,21 +63,21 @@ struct SysBox: Wixel {
 
     func sample() async -> SysInfo { await source.read() }
 
-    func render(_ s: SysInfo, _ p: Palette) -> some View { SysView(info: s, p: p) }
+    func render(_ s: SysInfo, _ theme: ThemeContext) -> some View { SysView(info: s, theme: theme) }
 }
 
 private struct SysView: View {
     let info: SysInfo
-    let p: Palette
+    let theme: ThemeContext
 
     var body: some View {
-        let on = (info.connected ? p.c(4) : p.c(8)).color        // accent / dim
-        let ink = p.foreground.color
-        let sage = p.c(6).color
+        let on = theme.color(info.connected ? .accent : .muted)
+        let ink = theme.color(.foreground)
+        let sage = theme.color(.secondary)
         let jarPal: [Character: Color] = [
-            "D": p.c(3).color,          // outline (accent2)
+            "D": theme.color(.alternateAccent),
             "m": sage,                  // filled
-            "n": p.c(0).color,          // empty interior
+            "n": theme.color(.muted),
         ]
 
         HStack(alignment: .top, spacing: 22) {
@@ -92,11 +92,11 @@ private struct SysView: View {
                 label("disk", "\(Int(info.diskPct.rounded()))%", sage, ink)
             }
         }
-        .pane(p, insets: .init(top: 14, leading: 18, bottom: 14, trailing: 18))
+        .themedCard(theme, insets: .init(top: 14, leading: 18, bottom: 14, trailing: 18))
     }
 
     private func label(_ t: String, _ v: String, _ tColor: Color, _ ink: Color) -> some View {
         (Text(t + " ").foregroundColor(tColor) + Text(v).foregroundColor(ink))
-            .font(.pixel(9, bold: true))
+            .font(theme.font(.label))
     }
 }

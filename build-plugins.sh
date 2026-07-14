@@ -50,5 +50,14 @@ for dir in plugins/*/; do
     cp "build/plugins/$name/$CONFIG"/libWidget*.dylib "$DEST"/
 done
 
+for dir in themes/*/; do
+    name="$(basename "$dir")"
+    [ "$name" = "Template" ] && continue
+    echo "==> building theme: $name"
+    swift build --package-path "$dir" -c "$CONFIG" --scratch-path "build/themes/$name"
+    cp "build/themes/$name/$CONFIG"/libTheme*.dylib "$DEST"/
+done
+
 echo "==> installed $(ls "$DEST"/libWidget*.dylib | wc -l | tr -d ' ') plugin(s) into $DEST"
+echo "==> installed $(ls "$DEST"/libTheme*.dylib | wc -l | tr -d ' ') theme(s) into $DEST"
 echo "    footprint: $(du -sh build | cut -f1)   run: ./build/$CONFIG/wixels"

@@ -12,15 +12,15 @@
 import SwiftUI
 import WixelsKit
 
-struct Plant: Wixel {
+struct Plant: ThemeableWixel {
     static let kind = "plant"
 
     /// Default placement + wiring for the desktop config. See Registry.swift.
-    static func spec() -> WidgetSpec {
-        WidgetSpec(kind: kind,
+    static func spec() -> ThemedWidgetSpec {
+        ThemedWidgetSpec(widget: Self.self,
             defaultPlacement: .init(anchor: .topLeft, offset: .init(width: 40, height: -220),
                                     size: .init(width: 120, height: 130)),
-            build: { _, _ in erase(Plant()) })
+            build: { _, _ in Plant() })
     }
     static let refresh: RefreshPolicy = .idleStatic
     static let interactive = true
@@ -28,13 +28,6 @@ struct Plant: Wixel {
     static let nStages = 4
     static let waterSeconds = 0.75
     static let px: CGFloat = 5
-
-    // fixed plant greens (not theme-matched), surprise bloom, yellow centre
-    static let stem = RGB.from("#5f9e4f").color
-    static let leaf = RGB.from("#7cc15f").color
-    static let center = RGB.from("#ffd23f").color
-    static let flowers: [Color] = ["#ff6b9d", "#c46fff", "#ff8c42", "#5ec8ff",
-                                   "#ff5c5c", "#f4f4f4", "#ff9ecd"].map { RGB.from($0).color }
 
     // 13-wide grid. s stem · l leaf · f petal · x centre · r rim · m soil · p pot
     private static let e = "............."
@@ -55,34 +48,34 @@ struct Plant: Wixel {
     static let pot: Sprite = ["..rrrrrrrrr..", "..mmmmmmmmm..", "..ppppppppp..", "...ppppppp..."]
 
     func sample() async -> Int { 0 }   // no external data; palette + @AppStorage drive it
-    func render(_ s: Int, _ p: Palette) -> some View { PlantView(p: p) }
+    func render(_ s: Int, _ theme: ThemeContext) -> some View { PlantView(theme: theme) }
 }
 
 private struct PlantView: View {
-    let p: Palette
+    let theme: ThemeContext
     @AppStorage("cynPlantStage") private var stage = 0
     @AppStorage("cynPlantFlowerIdx") private var flowerIdx = 0
     @State private var watering = false
 
     var body: some View {
-        let flower = Plant.flowers[flowerIdx % Plant.flowers.count]
+        let flowerRoles: [ThemeSemanticColor] = [.negative, .warning, .accent, .alternateAccent]
+        let flower = theme.color(flowerRoles[flowerIdx % flowerRoles.count])
         let palette: [Character: Color] = [
-            "r": p.c(4).color,          // pot rim (accent)
-            "m": p.c(1).color,          // soil
-            "p": p.c(3).color,          // pot body (accent2)
-            "s": Plant.stem, "l": Plant.leaf,
-            "f": flower, "x": Plant.center,
+            "r": theme.color(.accent), "m": theme.color(.negative),
+            "p": theme.color(.alternateAccent),
+            "s": theme.color(.positive), "l": theme.color(.positive),
+            "f": flower, "x": theme.color(.warning),
         ]
         let grid = Plant.stages[stage] + Plant.pot
 
         return ZStack(alignment: .topLeading) {
             PixelStrip(frames: [grid], px: Plant.px, palette: palette)
             if watering {
-                WaterDrops(color: p.c(6).color,
+                WaterDrops(color: theme.color(.secondary),
                            width: CGFloat(13) * Plant.px, height: CGFloat(16) * Plant.px)
             }
         }
-        .pane(p)
+        .themedCard(theme)
         .contentShape(Rectangle())
         .onTapGesture { water() }
     }
@@ -95,7 +88,7 @@ private struct PlantView: View {
         watering = true
         DispatchQueue.main.asyncAfter(deadline: .now() + Plant.waterSeconds) {
             let next = (stage + 1) % Plant.nStages
-            if next == Plant.nStages - 1 { flowerIdx = Int.random(in: 0..<Plant.flowers.count) }
+            if next == Plant.nStages - 1 { flowerIdx = Int.random(in: 0..<4) }
             stage = next
             watering = false
         }

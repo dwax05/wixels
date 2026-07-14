@@ -14,9 +14,15 @@ func runLayoutTestSuite() -> Int32 {
                           placementWriter: { _ in })
 
     for entry in config.entries {
-        guard let spec = registrar.specs[entry.kind] else { continue }
-        host.mount(spec.build(services, entry.options), placement: spec.defaultPlacement,
-                   defaultPlacement: spec.defaultPlacement, configIndex: entry.sourceIndex)
+        if let spec = registrar.specs[entry.kind] {
+            host.mount(spec.build(services, entry.options), placement: spec.defaultPlacement,
+                       defaultPlacement: spec.defaultPlacement, configIndex: entry.sourceIndex)
+        } else if let resolved = registrar.resolveThemed(kind: entry.kind,
+            themeID: entry.theme ?? config.theme ?? "macos",
+            services: services, options: entry.options) {
+            host.mount(resolved.widget, placement: resolved.placement,
+                       defaultPlacement: resolved.placement, configIndex: entry.sourceIndex)
+        }
     }
 
     host.run()

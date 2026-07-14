@@ -27,6 +27,7 @@ struct ConfigEntry {
     /// always writes back to the block that produced this entry.
     let sourceIndex: Int
     let kind: String
+    let theme: String?
     let placement: PlacementOverride
     let options: Options
 }
@@ -37,6 +38,7 @@ struct ConfigEntry {
 /// `[widget.options]`, not here.
 struct LoadedConfig {
     var entries: [ConfigEntry] = []
+    var theme: String?
     var colors: String?          // wal palette file (PaletteStore)
     var nowplaying: String?      // music cache file (MusicMonitor)
 }
@@ -89,14 +91,24 @@ enum Config {
     static func parse(_ text: String) throws -> LoadedConfig {
         let table = try TOMLTable(string: text)
         let paths = table["paths"]?.table
+        let theme = validThemeID(table["theme"]?.table?["default"]?.string)
         let entries: [ConfigEntry] = (table["widget"]?.array).map(Array.init)?.enumerated().compactMap { index, item in
             guard let t = item.table, let kind = t["kind"]?.string else { return nil }
-            return ConfigEntry(sourceIndex: index, kind: kind,
+            return ConfigEntry(sourceIndex: index, kind: kind, theme: validThemeID(t["theme"]?.string),
                                placement: placement(from: t), options: options(from: t))
         } ?? []
-        return LoadedConfig(entries: entries,
+        return LoadedConfig(entries: entries, theme: theme,
                             colors: paths?["colors"]?.string,
                             nowplaying: paths?["nowplaying"]?.string)
+    }
+
+    private static func validThemeID(_ id: String?) -> String? {
+        guard let id, !id.isEmpty,
+              id.range(of: "^[a-z0-9]+(?:-[a-z0-9]+)*$", options: .regularExpression) != nil else {
+            if let id { Log.note("invalid theme id '\(id)' — ignoring") }
+            return nil
+        }
+        return id
     }
 
     private static func placement(from t: TOMLTable) -> PlacementOverride {

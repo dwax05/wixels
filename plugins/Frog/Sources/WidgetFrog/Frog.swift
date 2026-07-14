@@ -8,7 +8,7 @@
 import SwiftUI
 import WixelsKit
 
-struct Frog: Wixel {
+struct Frog: ThemeableWixel {
     let source: FrogSource
 
     static let kind = "frog"
@@ -16,11 +16,11 @@ struct Frog: Wixel {
     /// Default placement + wiring for the desktop config. See Registry.swift.
     /// Mounted before the clock (same window level) so the clock orders in front
     /// and hides the frog's body — keep frog above clock in Desktop.swift order.
-    static func spec() -> WidgetSpec {
-        WidgetSpec(kind: kind,
+    static func spec() -> ThemedWidgetSpec {
+        ThemedWidgetSpec(widget: Self.self,
             defaultPlacement: .init(anchor: .topCenter, offset: .init(width: 0, height: -136),
                                     size: .init(width: 100, height: 200)),
-            build: { _, _ in erase(Frog(source: FrogSource())) })
+            build: { _, _ in Frog(source: FrogSource()) })
     }
     static let refresh: RefreshPolicy = .interval(8)   // thermal changes slowly
     static let interactive = true
@@ -48,7 +48,7 @@ struct Frog: Wixel {
     ]
 
     func sample() async -> FrogState { await source.read() }
-    func render(_ s: FrogState, _ p: Palette) -> some View { FrogView(state: s, p: p) }
+    func render(_ s: FrogState, _ theme: ThemeContext) -> some View { FrogView(state: s, theme: theme) }
 }
 
 /// All per-state frog attributes in one place — sway speed, freeze, body colour —
@@ -60,43 +60,33 @@ extension FrogState {
     }
     /// Hot states freeze the sway (no compositor load while the CPU is stressed).
     var isHot: Bool { self == .serious || self == .critical }
-    /// Body colour ramps cool → hot across the wal slots.
-    func bodyColor(_ p: Palette) -> RGB {
+    func bodyRole() -> ThemeSemanticColor {
         switch self {
-        case .nominal:  p.c(2)
-        case .fair:     p.c(3)
-        case .serious:  p.c(3).mix(p.c(1), 0.5)
-        case .critical: p.c(1)
+        case .nominal: .positive; case .fair: .warning
+        case .serious, .critical: .negative
         }
     }
 }
 
 private struct FrogView: View {
     let state: FrogState
-    let p: Palette
+    let theme: ThemeContext
 
     @State private var popOffset: CGFloat = 0
     @State private var tongueOut = false
 
-    static let tongueRed = RGB.from("#E23B3B").color   // fixed red so it reads as a tongue
-
     var body: some View {
-        let ink = p.foreground
-        let body = state.bodyColor(p)
         let palette: [Character: Color] = [
-            "G": body.color,
-            "D": body.shade(0.45).color,        // darker outline
-            "b": body.mix(ink, 0.55).color,     // pale belly
-            "e": p.background.color,            // eyes (dark cut-out)
-            "g": ink.color,                     // eye glint
-            "t": p.c(3).color,                  // toe pads (yellow slot)
+            "G": theme.color(state.bodyRole()), "D": theme.color(.border),
+            "b": theme.color(.secondary), "e": theme.color(.background),
+            "g": theme.color(.foreground), "t": theme.color(.alternateAccent),
         ]
 
         return frog(palette)
             .modifier(Sway(period: state.swayPeriod, frozen: state.isHot))
             .overlay(alignment: .bottom) {
                 // tongue flicks down from the mouth (bottom, once flipped)
-                Rectangle().fill(FrogView.tongueRed)
+                Rectangle().fill(theme.color(.negative))
                     .frame(width: 2, height: 4 * Frog.px)
                     .scaleEffect(y: tongueOut ? 1 : 0, anchor: .top)
                     .offset(x: -1, y: 4 * Frog.px)

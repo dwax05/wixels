@@ -15,17 +15,17 @@
 import SwiftUI
 import WixelsKit
 
-struct CatPet: Wixel {
+struct CatPet: ThemeableWixel {
     let source: PetSource
 
     static let kind = "pet"
 
     /// Default placement + wiring for the desktop config. See Registry.swift.
-    static func spec() -> WidgetSpec {
-        WidgetSpec(kind: kind,
+    static func spec() -> ThemedWidgetSpec {
+        ThemedWidgetSpec(widget: Self.self,
             defaultPlacement: .init(anchor: .bottomLeft, offset: .init(width: 224, height: 116),
                                     size: .init(width: 92, height: 106)),
-            build: { s, _ in erase(CatPet(source: PetSource(cpu: s.cpu, music: s.music))) })
+            build: { s, _ in CatPet(source: PetSource(cpu: s.cpu, music: s.music)) })
     }
     static let refresh: RefreshPolicy = .interval(3)   // native sources are cheap, so poll snappier than pet.py's 10s
     static let interactive = true
@@ -113,14 +113,13 @@ struct CatPet: Wixel {
     static let happy: Sprite = set(base, closeEyes("D") + cheeks + openMouth)
     // floating heart (5×4) for the pet reaction — X = fixed bright pink
     static let bigHeart: Sprite = ["XX.XX", "XXXXX", ".XXX.", "..X.."]
-    static let heartPink = Color(red: 1.0, green: 0.42, blue: 0.62)   // #ff6b9d
 
     // sprite is 48×51 at px=3; the outer frame adds headroom above for notes.
     static let px: CGFloat = 3
     static let frameW: CGFloat = 16 * px, frameH: CGFloat = 17 * px
     static let boxW: CGFloat = 72, boxH: CGFloat = 96
 
-    func render(_ s: PetState, _ p: Palette) -> some View { PetView(s: s, p: p) }
+    func render(_ s: PetState, _ theme: ThemeContext) -> some View { PetView(s: s, theme: theme) }
 }
 
 /// The pet as a stateful view: a click makes it happy (closed-eye smile + bounce)
@@ -128,7 +127,7 @@ struct CatPet: Wixel {
 /// a pure map to this view; the transient reaction lives here.
 private struct PetView: View {
     let s: PetState
-    let p: Palette
+    let theme: ThemeContext
     @State private var petting = false
     @State private var hearts: [Heart] = []
 
@@ -140,22 +139,17 @@ private struct PetView: View {
 
     var body: some View {
         let palette: [Character: Color] = [
-            "B": p.c(4).color,          // cinnabar fur
-            "D": p.c(3).color,          // outline
-            "e": p.background.color,    // eyes (dark cutout)
-            "n": p.c(2).color,          // nose
-            "w": p.c(3).color,          // mouth line
-            "i": p.c(2).color,          // inner ear
-            "m": p.c(0).color,          // open mouth
-            "c": p.c(2).color,          // blush cheeks
-            "s": p.c(6).color,          // sweat drop
-            "z": p.foreground.color,    // sleep z
+            "B": theme.color(.accent), "D": theme.color(.alternateAccent),
+            "e": theme.color(.background), "n": theme.color(.positive),
+            "w": theme.color(.alternateAccent), "i": theme.color(.positive),
+            "m": theme.color(.muted), "c": theme.color(.positive),
+            "s": theme.color(.secondary), "z": theme.color(.foreground),
         ]
         // petting overrides the system-state animation with the happy face
         let anim: (frames: [Sprite], ms: Double) = petting
             ? ([CatPet.happy], 0)
             : CatPet.frames(for: s.mood, charging: s.charging)
-        let noteColors = [p.c(6).color, p.c(2).color, p.foreground.color]  // sage, pink, ink
+        let noteColors = [theme.color(.secondary), theme.color(.positive), theme.color(.foreground)]
 
         return ZStack(alignment: .bottom) {
             // cat body on its own pane first, so particles (below) layer on top
@@ -163,7 +157,7 @@ private struct PetView: View {
                 PixelStrip(frames: anim.frames, px: CatPet.px, palette: palette, frameMS: anim.ms)
                 if s.music {
                     PixelStrip(frames: [CatPet.headphones], px: CatPet.px,
-                               palette: ["P": p.foreground.color, "U": p.c(5).color])
+                               palette: ["P": theme.color(.foreground), "U": theme.color(.secondary)])
                 }
             }
             .modifier(Wiggle(mood: s.mood, music: s.music, happy: petting))
@@ -174,7 +168,7 @@ private struct PetView: View {
             }
             // hearts burst (rise + fade, port of pet-heart)
             ForEach(hearts) { h in
-                RisingParticle(sprite: CatPet.bigHeart, palette: ["X": CatPet.heartPink],
+                RisingParticle(sprite: CatPet.bigHeart, palette: ["X": theme.color(.negative)],
                                size: h.size, x: h.x, baseY: h.top, rise: 26, fadeIn: 0.25,
                                delay: h.delay, dur: h.dur, rot: h.rot, scaleGrow: 0.3)
             }

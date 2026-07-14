@@ -33,6 +33,13 @@ public struct NowPlayingInfo: Equatable, Sendable {
     public static let idle = NowPlayingInfo(hasTrack: false, title: "", artist: "", playing: false, art: "")
 }
 
+public struct NowPlayingActions: Sendable {
+    public let togglePlayPause: @Sendable () -> Void
+    public init(togglePlayPause: @escaping @Sendable () -> Void) {
+        self.togglePlayPause = togglePlayPause
+    }
+}
+
 /// The richer snapshot the poster card draws — adds album + formatted duration.
 public struct PosterInfo: Equatable, Sendable {
     public var hasTrack: Bool

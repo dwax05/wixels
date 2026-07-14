@@ -129,17 +129,17 @@ final class WeatherSource: DataSource, @unchecked Sendable {
     ]
 }
 
-struct Weather: Wixel {
+struct Weather: ThemeableWixel {
     let source: WeatherSource
 
     static let kind = "weather"
 
     /// Default placement + wiring for the desktop config. See Registry.swift.
-    static func spec() -> WidgetSpec {
-        WidgetSpec(kind: kind,
+    static func spec() -> ThemedWidgetSpec {
+        ThemedWidgetSpec(widget: Self.self,
             defaultPlacement: .init(anchor: .topRight, offset: .init(width: 0, height: -60),
                                     size: .init(width: 130, height: 150), align: .trailing),
-            build: { _, _ in erase(Weather(source: WeatherSource())) })
+            build: { _, _ in Weather(source: WeatherSource()) })
     }
     static let refresh: RefreshPolicy = .interval(900)   // 15 min; data effectively cached
     static let px: CGFloat = 5
@@ -163,16 +163,16 @@ struct Weather: Wixel {
     ]
 
     func sample() async -> WeatherInfo { await source.read() }
-    func render(_ s: WeatherInfo, _ p: Palette) -> some View { WeatherView(info: s, p: p) }
+    func render(_ s: WeatherInfo, _ theme: ThemeContext) -> some View { WeatherView(info: s, theme: theme) }
 }
 
 private struct WeatherView: View {
     let info: WeatherInfo
-    let p: Palette
+    let theme: ThemeContext
 
     var body: some View {
-        let accent = p.c(4).color, grey = p.c(8).color, ink = p.foreground.color
-        let sage = p.c(6).color
+        let accent = theme.color(.accent), grey = theme.color(.muted), ink = theme.color(.foreground)
+        let sage = theme.color(.secondary)
         let pal: [Character: Color] = ["S": accent, "C": grey, "M": ink, "B": accent]
         let px = Weather.px
         let sceneW = 12 * px, sceneH = 10 * px
@@ -192,12 +192,12 @@ private struct WeatherView: View {
                 }
                 if k == .fog { fogBars(grey, px: px).offset(y: 6 * px) }
             }
-            Text(info.tempF.map { "\($0)°F" } ?? "--").font(.pixel(16)).foregroundColor(accent)
-            Text(info.cond).font(.pixel(9)).foregroundColor(sage)
+            Text(info.tempF.map { "\($0)°F" } ?? "--").font(theme.font(.title)).foregroundColor(accent)
+            Text(info.cond).font(theme.font(.label)).foregroundColor(sage)
                 .frame(maxWidth: 12 * px + 20).multilineTextAlignment(.center)
         }
         .fixedSize()
-        .pane(p)
+        .themedCard(theme)
     }
 
     private func fogBars(_ color: Color, px: CGFloat) -> some View {

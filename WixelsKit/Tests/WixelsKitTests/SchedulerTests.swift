@@ -1,4 +1,5 @@
 import WixelsKit
+import SwiftUI
 
 @MainActor
 enum SchedulerTests {
@@ -6,7 +7,26 @@ enum SchedulerTests {
         try await startTicksActiveWidgetsAccordingToTheirRefreshPolicy()
         try await refreshOnceOnlyTicksActiveIdleStaticWidgets()
         try await overlappingPetReadsRemainValid()
+        try universalThemeRegistryResolvesAndPreservesPlacement()
         print("PASS scheduler suite")
+    }
+
+    private static func universalThemeRegistryResolvesAndPreservesPlacement() throws {
+        let registrar = Registrar()
+        registrar.add(TestThemeable.spec())
+        let native = ThemeDefinition(manifest: .init(id: "native", name: "Native"),
+                                     tokens: ThemeDefinition.macos.tokens)
+        registrar.add(native)
+        let resolved = registrar.resolveThemed(kind: "test", themeID: "native",
+                                               services: Services(), options: .empty)
+        try check(resolved?.themeID == "native", "registered universal theme resolves")
+        try check(resolved?.placement.size.width == 10, "theme cannot change widget placement")
+        let fallback = registrar.resolveThemed(kind: "test", themeID: "missing",
+                                               services: Services(), options: .empty)
+        try check(fallback?.themeID == "macos", "unknown theme falls back to macos")
+        registrar.add(ThemeDefinition(manifest: .init(id: "native", name: "Duplicate"),
+                                      tokens: ThemeDefinition.cynaberii.tokens))
+        try check(registrar.resolveTheme("native") == native, "duplicate theme keeps first registration")
     }
 
     private static func startTicksActiveWidgetsAccordingToTheirRefreshPolicy() async throws {
@@ -75,6 +95,18 @@ enum SchedulerTests {
         guard condition() else { throw TestFailure(message) }
         print("PASS \(message)")
     }
+}
+
+private struct TestThemeable: ThemeableWixel {
+    static let kind = "test"
+    static let refresh: RefreshPolicy = .idleStatic
+    static func spec() -> ThemedWidgetSpec {
+        ThemedWidgetSpec(widget: Self.self,
+            defaultPlacement: .init(anchor: .center, size: .init(width: 10, height: 10)),
+            build: { _, _ in Self() })
+    }
+    func sample() async -> Int { 1 }
+    func render(_ sample: Int, _ theme: ThemeContext) -> some View { Text("\(sample)") }
 }
 
 private struct TestFailure: Error, CustomStringConvertible {

@@ -23,6 +23,7 @@ public final class PaletteStore: ObservableObject, @unchecked Sendable {
     private let file: String
     private var source: DispatchSourceFileSystemObject?
     private var fd: Int32 = -1
+    private var directorySource: DispatchSourceFileSystemObject?
 
     public init(colorsPath: String? = nil) {
         file = Paths.resolve(env: "WIXELS_COLORS", config: colorsPath,
@@ -58,11 +59,10 @@ public final class PaletteStore: ObservableObject, @unchecked Sendable {
     /// we tear down and re-arm on the new inode.
     private func watch() {
         source?.cancel()
+        directorySource?.cancel(); directorySource = nil
         fd = open(file, O_EVTONLY)
         guard fd >= 0 else {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
-                self?.watch()
-            }
+            watchParentDirectory()
             return
         }
         // Fire on the MAIN queue: handler runs on the main thread (correct for
@@ -85,5 +85,27 @@ public final class PaletteStore: ObservableObject, @unchecked Sendable {
         src.setCancelHandler { [fd] in close(fd) }
         src.resume()
         source = src
+    }
+
+    /// If pywal has never run, watch for colors.json to be created without polling.
+    private func watchParentDirectory() {
+        let desired = (file as NSString).deletingLastPathComponent
+        var directory = desired
+        while !FileManager.default.fileExists(atPath: directory) {
+            let parent = (directory as NSString).deletingLastPathComponent
+            guard parent != directory else { return }
+            directory = parent
+        }
+        let directoryFD = open(directory, O_EVTONLY)
+        guard directoryFD >= 0 else { return }
+        let src = DispatchSource.makeFileSystemObjectSource(
+            fileDescriptor: directoryFD, eventMask: [.write, .extend, .rename], queue: .main)
+        src.setEventHandler { [weak self] in
+            guard let self else { return }
+            if FileManager.default.fileExists(atPath: self.file) { self.reload(); self.watch() }
+            else if FileManager.default.fileExists(atPath: desired) { self.watch() }
+        }
+        src.setCancelHandler { close(directoryFD) }
+        src.resume(); directorySource = src
     }
 }

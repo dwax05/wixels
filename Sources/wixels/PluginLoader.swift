@@ -19,7 +19,7 @@ enum PluginLoader {
         var seen = Set<String>()
         for dir in searchDirs() {
             guard let items = try? FileManager.default.contentsOfDirectory(atPath: dir) else { continue }
-            for file in items.sorted() where isPlugin(file) && seen.insert(file).inserted {
+            for file in items.sorted() where isLoadable(file) && seen.insert(file).inserted {
                 loadOne(dir + "/" + file, into: registrar)
             }
         }
@@ -28,8 +28,8 @@ enum PluginLoader {
     /// Built-in plugins are named `libWidget*.dylib`; user drop-ins may be any
     /// `.dylib`/`.bundle` — but we only auto-load the `Widget*` naming to avoid
     /// dlopening unrelated libraries sitting in the build dir.
-    private static func isPlugin(_ file: String) -> Bool {
-        (file.hasPrefix("libWidget") && file.hasSuffix(".dylib"))
+    private static func isLoadable(_ file: String) -> Bool {
+        ((file.hasPrefix("libWidget") || file.hasPrefix("libTheme")) && file.hasSuffix(".dylib"))
     }
 
     private static func searchDirs() -> [String] {
@@ -37,6 +37,7 @@ enum PluginLoader {
         if let exe = Bundle.main.executableURL?.resolvingSymlinksInPath()
             .deletingLastPathComponent().path { dirs.append(exe) }
         dirs.append(("~/.config/wixels/plugins" as NSString).expandingTildeInPath)
+        dirs.append(("~/.config/wixels/themes" as NSString).expandingTildeInPath)
         return dirs
     }
 

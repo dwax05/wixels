@@ -13,6 +13,7 @@
 // to see the host's `WidgetHost` type.
 
 import Foundation
+import SwiftUI
 
 public struct WidgetSpec: Sendable {
     public let kind: String
@@ -27,18 +28,75 @@ public struct WidgetSpec: Sendable {
     }
 }
 
+public struct NoActions: Sendable { public init() {} }
+
+public struct ThemedWidgetSpec: Sendable {
+    public let kind: String
+    public let defaultPlacement: Placement
+    let build: @MainActor @Sendable (Services, Options, ThemeDefinition) -> any MountableWidget
+
+    public init<W: ThemeableWixel>(widget: W.Type, defaultPlacement: Placement,
+                                   build: @escaping @MainActor @Sendable (Services, Options) -> W) {
+        kind = W.kind; self.defaultPlacement = defaultPlacement
+        self.build = { services, options, theme in eraseThemed(build(services, options), theme: theme) }
+    }
+}
+
+public struct ResolvedThemedWidget {
+    public let widget: any MountableWidget
+    public let placement: Placement
+    public let themeID: String
+}
+
 /// Collects the specs a plugin registers. The host makes one, passes it into every
 /// plugin's `wixels_register`, then resolves the config against `specs`.
 public final class Registrar: @unchecked Sendable {
     public private(set) var specs: [String: WidgetSpec] = [:]
-    public init() {}
+    public private(set) var themedSpecs: [String: ThemedWidgetSpec] = [:]
+    public private(set) var themes: [String: ThemeDefinition] = [:]
+    private var warnedThemeIDs = Set<String>()
+    public init() { themes[ThemeDefinition.macos.manifest.id] = .macos }
 
     public func add(_ spec: WidgetSpec) {
-        if specs[spec.kind] != nil {
+        if specs[spec.kind] != nil || themedSpecs[spec.kind] != nil {
             Log.note("duplicate widget kind '\(spec.kind)' — keeping the first")
             return
         }
         specs[spec.kind] = spec
+    }
+
+    public func add(_ spec: ThemedWidgetSpec) {
+        if themedSpecs[spec.kind] != nil || specs[spec.kind] != nil {
+            Log.note("duplicate widget kind '\(spec.kind)' — keeping the first"); return
+        }
+        themedSpecs[spec.kind] = spec
+    }
+
+    public func add(_ theme: ThemeDefinition) {
+        guard ThemeManifest.isValidID(theme.manifest.id) else {
+            Log.note("invalid theme id '\(theme.manifest.id)' — rejected"); return
+        }
+        if themes[theme.manifest.id] == theme { return }
+        guard themes[theme.manifest.id] == nil else { Log.note("duplicate theme '\(theme.manifest.id)' — keeping the first"); return }
+        themes[theme.manifest.id] = theme
+    }
+
+    public func resolveTheme(_ id: String?) -> ThemeDefinition {
+        guard let id, let theme = themes[id] else {
+            if let id, id != "macos", warnedThemeIDs.insert(id).inserted {
+                Log.note("unknown theme '\(id)' — using macos")
+            }
+            return themes["macos"] ?? .macos
+        }
+        return theme
+    }
+
+    @MainActor public func resolveThemed(kind: String, themeID: String?, services: Services,
+                                         options: Options) -> ResolvedThemedWidget? {
+        guard let spec = themedSpecs[kind] else { return nil }
+        let theme = resolveTheme(themeID)
+        return ResolvedThemedWidget(widget: spec.build(services, options, theme),
+            placement: spec.defaultPlacement, themeID: theme.manifest.id)
     }
 }
 

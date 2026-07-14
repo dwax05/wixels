@@ -25,6 +25,21 @@ public extension Wixel {
     static var interactive: Bool { false }   // most widgets are click-through wallpaper
 }
 
+public protocol ThemeableWixel: Sendable {
+    associatedtype Sample: Equatable & Sendable
+    associatedtype Content: View
+    static var kind: String { get }
+    static var refresh: RefreshPolicy { get }
+    static var interactive: Bool { get }
+    static func spec() -> ThemedWidgetSpec
+    func sample() async -> Sample
+    @MainActor @ViewBuilder func render(_ sample: Sample, _ theme: ThemeContext) -> Content
+}
+
+public extension ThemeableWixel {
+    static var interactive: Bool { false }
+}
+
 public enum RefreshPolicy: Sendable {
     case interval(TimeInterval)                     // poll (disk, cpu, nowplaying via shared cache)
     case idleStatic                                 // sample once (battery rule)
@@ -74,6 +89,10 @@ public protocol MountableWidget {
 public func erase<W: Wixel>(_ widget: W) -> any MountableWidget { ErasedWidget(widget) }
 
 @MainActor
+func eraseThemed<W: ThemeableWixel>(_ widget: W, theme: ThemeDefinition)
+    -> any MountableWidget { ErasedThemedWidget(widget, theme: theme) }
+
+@MainActor
 final class ErasedWidget<W: Wixel>: MountableWidget {
     private let model: WidgetModel<W>
     init(_ widget: W) { model = WidgetModel(widget) }
@@ -114,6 +133,40 @@ final class WidgetModel<W: Wixel>: ObservableObject, WidgetTicker {
 /// SwiftUI wrapper that redraws when either the sample or the palette changes.
 struct WidgetView<W: Wixel>: View {
     @ObservedObject var model: WidgetModel<W>
+    @ObservedObject var palette: PaletteStore
+    var body: some View { model.view(palette.palette) }
+}
+
+@MainActor
+final class ErasedThemedWidget<W: ThemeableWixel>: MountableWidget {
+    private let model: ThemedWidgetModel<W>
+    init(_ widget: W, theme: ThemeDefinition) { model = ThemedWidgetModel(widget, theme: theme) }
+    var kind: String { W.kind }
+    var refresh: RefreshPolicy { W.refresh }
+    var interactive: Bool { W.interactive }
+    func makeTicker() -> any WidgetTicker { model }
+    func makeView(_ palette: PaletteStore) -> AnyView { AnyView(ThemedWidgetView(model: model, palette: palette)) }
+}
+
+@MainActor
+final class ThemedWidgetModel<W: ThemeableWixel>: ObservableObject, WidgetTicker {
+    let widget: W
+    let theme: ThemeDefinition
+    @Published private(set) var sample: W.Sample?
+    var active = true
+    init(_ widget: W, theme: ThemeDefinition) { self.widget = widget; self.theme = theme }
+    var kind: String { W.kind }
+    var refresh: RefreshPolicy { W.refresh }
+    var interactive: Bool { W.interactive }
+    func tick() async { let next = await widget.sample(); if next != sample { sample = next } }
+    func view(_ palette: Palette) -> AnyView {
+        guard let sample else { return AnyView(Color.clear) }
+        return AnyView(widget.render(sample, ThemeContext(definition: theme, palette: palette)))
+    }
+}
+
+struct ThemedWidgetView<W: ThemeableWixel>: View {
+    @ObservedObject var model: ThemedWidgetModel<W>
     @ObservedObject var palette: PaletteStore
     var body: some View { model.view(palette.palette) }
 }

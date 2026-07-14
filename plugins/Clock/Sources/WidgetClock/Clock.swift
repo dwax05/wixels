@@ -6,18 +6,18 @@
 import SwiftUI
 import WixelsKit
 
-struct PixelClock: Wixel {
+struct PixelClock: ThemeableWixel {
     static let kind = "clock"
 
     /// Default placement + wiring for the desktop config. See Registry.swift.
     /// zBoost: 1 keeps the clock above the frog it hides, even after a click reorders.
-    static func spec() -> WidgetSpec {
-        WidgetSpec(kind: kind,
+    static func spec() -> ThemedWidgetSpec {
+        ThemedWidgetSpec(widget: Self.self,
             defaultPlacement: .init(anchor: .topCenter, offset: .init(width: 0, height: -70),
                                     size: .init(width: 220, height: 120), zBoost: 1),
-            build: { _, _ in erase(PixelClock()) })
+            build: { _, _ in PixelClock() })
     }
-    static let refresh: RefreshPolicy = .idleStatic
+    static let refresh: RefreshPolicy = .interval(1)
     // interactive (no click action) only so it shares the frog's window level and
     // can be ordered in front of it — the clock card hides the frog's body.
     static let interactive = true
@@ -46,23 +46,26 @@ struct PixelClock: Wixel {
         }
     }
 
-    func sample() async -> Int { 0 }   // time is view-side; palette drives colours
-    func render(_ s: Int, _ p: Palette) -> some View { ClockView(p: p) }
+    func sample() async -> ClockSnapshot { ClockSnapshot() }
+    func render(_ sample: ClockSnapshot, _ theme: ThemeContext) -> some View {
+        ClockView(snapshot: sample, theme: theme)
+    }
 }
 
-private struct ClockView: View {
-    let p: Palette
+struct ClockView: View {
+    let snapshot: ClockSnapshot
+    let theme: ThemeContext
 
     static let days = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"]
     static let months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN",
                          "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
 
     var body: some View {
-        let accent = p.c(4).color
+        let accent = theme.color(.accent)
         let digitPal: [Character: Color] = ["#": accent]
 
         // one redraw a second — cheap, and lets the colon blink without a scheduler
-        return TimelineView(.periodic(from: .now, by: 1)) { ctx in
+        return TimelineView(.periodic(from: snapshot.date, by: 1)) { ctx in
             let c = Calendar.current.dateComponents(
                 [.hour, .minute, .second, .weekday, .month, .day], from: ctx.date)
             let hour12 = (c.hour ?? 0) % 12 == 0 ? 12 : (c.hour ?? 0) % 12
@@ -80,11 +83,11 @@ private struct ClockView: View {
                     PixelStrip(frames: [PixelClock.digits(mm)], px: PixelClock.px, palette: digitPal)
                 }
                 Text(date)
-                    .font(.pixel(12))
+                    .font(theme.font(.body))
                     .tracking(2)
-                    .foregroundColor(p.c(6).color)      // sage
+                    .foregroundColor(theme.color(.secondary))
             }
         }
-        .pane(p, insets: .init(top: 16, leading: 22, bottom: 16, trailing: 22))
+        .themedCard(theme, insets: .init(top: 16, leading: 22, bottom: 16, trailing: 22))
     }
 }

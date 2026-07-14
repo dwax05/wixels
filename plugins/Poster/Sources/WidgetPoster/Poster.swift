@@ -8,24 +8,24 @@ import AppKit
 import SwiftUI
 import WixelsKit
 
-struct Poster: Wixel {
+struct Poster: ThemeableWixel {
     let monitor: MusicMonitor
 
     static let kind = "poster"
 
     /// Default placement + wiring for the desktop config. See Registry.swift.
-    static func spec() -> WidgetSpec {
-        WidgetSpec(kind: kind,
+    static func spec() -> ThemedWidgetSpec {
+        ThemedWidgetSpec(widget: Self.self,
             defaultPlacement: .init(anchor: .topRight, offset: .init(width: 0, height: -220),
                                     size: .init(width: 230, height: 460), align: .trailing),
-            build: { s, _ in erase(Poster(monitor: s.music)) })
+            build: { s, _ in Poster(monitor: s.music) })
     }
     static let refresh: RefreshPolicy = .interval(4)
     static let interactive = true
     static let artW: CGFloat = 200      // cover edge (px)
 
     func sample() async -> PosterInfo { await monitor.poster() }
-    func render(_ s: PosterInfo, _ p: Palette) -> some View { PosterView(info: s, p: p, monitor: monitor) }
+    func render(_ s: PosterInfo, _ theme: ThemeContext) -> some View { PosterView(info: s, theme: theme, monitor: monitor) }
 }
 
 /// Palette pulled from the album cover — drives everything inside the card.
@@ -119,7 +119,7 @@ struct CoverPalette: Equatable, Sendable {
 
 private struct PosterView: View {
     let info: PosterInfo
-    let p: Palette
+    let theme: ThemeContext
     let monitor: MusicMonitor
 
     @State private var art: NSImage?
@@ -140,7 +140,7 @@ private struct PosterView: View {
     }
 
     private var card: some View {
-        let wAccent = p.c(4).color, wAccent2 = p.c(3).color   // wal chrome
+        let wAccent = theme.color(.accent)
         let cp = cover
 
         return VStack(alignment: .leading, spacing: 0) {
@@ -148,7 +148,7 @@ private struct PosterView: View {
             HStack(spacing: 5) {
                 Text("♪"); Text("NOW PLAYING")
             }
-            .font(.pixel(7)).tracking(1).foregroundColor(wAccent)
+            .font(theme.font(.caption)).tracking(1).foregroundColor(wAccent)
             .padding(.bottom, 9)
 
             // cover
@@ -166,18 +166,18 @@ private struct PosterView: View {
             // title + duration
             HStack(alignment: .top, spacing: 8) {
                 Text(info.title.uppercased())
-                    .font(.pixel(11)).tracking(0.3).foregroundColor(cp.ink)
+                    .font(theme.font(.body)).tracking(0.3).foregroundColor(cp.ink)
                     .lineLimit(2).frame(height: 31, alignment: .top)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 if !info.duration.isEmpty {
-                    Text(info.duration).font(.pixel(9)).foregroundColor(cp.ink)
+                    Text(info.duration).font(theme.font(.label)).foregroundColor(cp.ink)
                 }
             }
             .padding(.top, 12)
 
             // artist + controls
             HStack(spacing: 8) {
-                Text(info.artist).font(.pixel(9)).foregroundColor(cp.ink)
+                Text(info.artist).font(theme.font(.label)).foregroundColor(cp.ink)
                     .lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
                 HStack(spacing: 8) {
                     icon(shownPlaying ? "pause.fill" : "play.fill", cp.ink) { togglePlay() }
@@ -192,7 +192,7 @@ private struct PosterView: View {
 
             // album (fixed 2-line height)
             Text(info.album)
-                .font(.pixel(8)).foregroundColor(cp.inkSoft)
+                .font(theme.font(.caption)).foregroundColor(cp.inkSoft)
                 .lineLimit(2).frame(height: 27, alignment: .top)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.top, 10)
@@ -210,9 +210,8 @@ private struct PosterView: View {
             .padding(.top, 12)
         }
         .frame(width: Poster.artW)
-        .padding(.init(top: 12, leading: 12, bottom: 11, trailing: 12))
-        // album paper fill inside the shared wal-chrome frame
-        .framedPane(border: wAccent, shadow: wAccent2, fill: cp.paper)
+        .background(cp.paper)
+        .themedCard(theme, insets: .init(top: 12, leading: 12, bottom: 11, trailing: 12))
         .task(id: info.art) {
             let b64 = info.art
             art = decodeArtwork(b64)                 // cheap decode, fine on main

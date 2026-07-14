@@ -16,18 +16,18 @@
 import SwiftUI
 import WixelsKit
 
-struct DiskSnail: Wixel {
+struct DiskSnail: ThemeableWixel {
     let disk: DiskSource
 
     static let kind = "disk-snail"
 
     /// Default placement + wiring for the desktop config. See Registry.swift.
-    static func spec() -> WidgetSpec {
-        WidgetSpec(kind: kind,
+    static func spec() -> ThemedWidgetSpec {
+        ThemedWidgetSpec(widget: Self.self,
             defaultPlacement: .init(anchor: .topLeft, offset: .init(width: -3, height: -30),
                                     size: .init(width: DiskSnail.Crawl.containerW,
                                                 height: DiskSnail.Crawl.containerH)),
-            build: { _, opts in erase(DiskSnail(disk: DiskSource(path: opts.string("path") ?? "/"))) })
+            build: { _, opts in DiskSnail(disk: DiskSource(path: opts.string("path") ?? "/")) })
     }
     static let refresh: RefreshPolicy = .idleStatic
     static let interactive = true
@@ -115,26 +115,23 @@ struct DiskSnail: Wixel {
 
     func sample() async -> DiskInfo { await disk.read() }
 
-    func render(_ s: DiskInfo, _ p: Palette) -> some View { SnailView(info: s, p: p) }
+    func render(_ s: DiskInfo, _ theme: ThemeContext) -> some View { SnailView(info: s, theme: theme) }
 }
 
 /// The snail as a stateful view so a click can tuck its eyestalks in for a beat,
 /// like the JS component's useState(shy). render() stays a pure map to this view.
 private struct SnailView: View {
     let info: DiskInfo
-    let p: Palette
+    let theme: ThemeContext
     @State private var shy = false
 
     var body: some View {
         let disk = max(0, min(100, info.usedFraction * 100))
         let high = disk >= 90                          // nearly-full drive flushes warm
-        let body = p.c(2)
         let palette: [Character: Color] = [
-            "D": body.shade(0.5).color,                // outline
-            "B": body.color,                           // foot/head
-            "F": (high ? p.c(1) : p.c(4)).color,       // filled shell
-            "e": body.mix(p.background, 0.65).color,   // empty shell
-            "o": p.foreground.color,                   // eyes
+            "D": theme.color(.border), "B": theme.color(.positive),
+            "F": theme.color(high ? .negative : .accent),
+            "e": theme.color(.muted), "o": theme.color(.foreground),
         ]
         let grid = fillShell(shy ? DiskSnail.spriteShy : DiskSnail.sprite, disk)
         // Re-evaluate the crawl position periodically (the snail moves ~18px/hr,

@@ -7,6 +7,11 @@ import IOKit
 import IOKit.ps
 import CoreWLAN
 
+public struct ClockSnapshot: Equatable, Sendable {
+    public let date: Date
+    public init(date: Date = Date()) { self.date = date }
+}
+
 // MARK: - Interfaces
 
 /// Walk active BSD network interfaces, handing each `ifaddrs` to `body` — the
@@ -204,10 +209,9 @@ public struct StatsInfo: Equatable, Sendable {
     public var battery: Int      // %
     public var charging: Bool
     public var plugged: Bool
-    public var wilt: Int         // 0 (perky) … 3 (droopy), from CPU load
-    public init(cpu: Int, mem: Int, battery: Int, charging: Bool, plugged: Bool, wilt: Int) {
+    public init(cpu: Int, mem: Int, battery: Int, charging: Bool, plugged: Bool) {
         self.cpu = cpu; self.mem = mem; self.battery = battery
-        self.charging = charging; self.plugged = plugged; self.wilt = wilt
+        self.charging = charging; self.plugged = plugged
     }
 }
 
@@ -221,10 +225,9 @@ public final class StatsSource: DataSource, @unchecked Sendable {
     public func read() async -> StatsInfo {
         let load = await cpu.read() * 100                 // 0…100
         let power = Power.read()
-        let wilt = load < 25 ? 0 : load < 50 ? 1 : load < 75 ? 2 : 3
         return StatsInfo(cpu: Int(load.rounded()), mem: Int(Self.memPct().rounded()),
                          battery: Int(power.pct.rounded()), charging: power.charging,
-                         plugged: power.plugged, wilt: wilt)
+                         plugged: power.plugged)
     }
 
     /// Used memory %: (active + wired + compressed) / physical, via host_statistics64.

@@ -10,32 +10,32 @@ import AppKit
 import SwiftUI
 import WixelsKit
 
-struct NowPlaying: Wixel {
+struct NowPlaying: ThemeableWixel {
     let monitor: MusicMonitor
 
     static let kind = "nowplaying"
 
     /// Default placement + wiring for the desktop config. See Registry.swift.
-    static func spec() -> WidgetSpec {
-        WidgetSpec(kind: kind,
+    static func spec() -> ThemedWidgetSpec {
+        ThemedWidgetSpec(widget: Self.self,
             defaultPlacement: .init(anchor: .bottomLeft, offset: .init(width: 12, height: 36),
                                     size: .init(width: 320, height: 96)),
-            build: { s, _ in erase(NowPlaying(monitor: s.music)) })
+            build: { s, _ in NowPlaying(monitor: s.music) })
     }
     static let refresh: RefreshPolicy = .interval(3)
     static let interactive = true
 
     func sample() async -> NowPlayingInfo { await monitor.nowPlaying() }
 
-    func render(_ s: NowPlayingInfo, _ p: Palette) -> some View {
-        NowPlayingView(info: s, p: p, monitor: monitor)
+    func render(_ sample: NowPlayingInfo, _ theme: ThemeContext) -> some View {
+        NowPlayingView(info: sample, theme: theme, actions: NowPlayingActions { monitor.togglePlayPause() })
     }
 }
 
-private struct NowPlayingView: View {
+struct NowPlayingView: View {
     let info: NowPlayingInfo
-    let p: Palette
-    let monitor: MusicMonitor
+    let theme: ThemeContext
+    let actions: NowPlayingActions
 
     @State private var art: NSImage?
     @State private var override = PlayOverride()
@@ -46,27 +46,27 @@ private struct NowPlayingView: View {
     }
 
     var body: some View {
-        let accent = p.c(4).color, accent2 = p.c(3).color
-        let sage = p.c(6).color, ink = p.foreground.color
+        let accent = theme.color(.accent), accent2 = theme.color(.alternateAccent)
+        let sage = theme.color(.secondary), ink = theme.color(.foreground)
 
         HStack(alignment: .center, spacing: 12) {
             artwork(sage: sage)
             reels(accent: accent, accent2: accent2)
             VStack(alignment: .leading, spacing: 5) {
                 Text(info.hasTrack ? info.title : "nothing playing")
-                    .font(.pixel(11))
+                    .font(theme.font(.body))
                     .foregroundColor(ink).lineLimit(1).truncationMode(.tail)
                 Text(info.hasTrack ? info.artist : "—")
-                    .font(.pixel(9))
+                    .font(theme.font(.label))
                     .foregroundColor(accent).lineLimit(1).truncationMode(.tail)
                 Text(!info.hasTrack ? "❚❚ idle" : shownPlaying ? "▶ playing" : "❚❚ paused")
-                    .font(.pixel(8))
+                    .font(theme.font(.caption))
                     .foregroundColor(sage)
             }
             Spacer(minLength: 0)
         }
         .frame(width: 272, alignment: .leading)            // stable right edge (JS fixed width)
-        .pane(p)
+        .themedCard(theme)
         .contentShape(Rectangle())
         .onTapGesture { toggle() }
         .task(id: info.art) { art = decodeArtwork(info.art) }
@@ -78,7 +78,7 @@ private struct NowPlayingView: View {
                 Image(nsImage: art).resizable().interpolation(.none)
                     .aspectRatio(contentMode: .fill)
             } else {
-                Text("♪").font(.pixel(22)).foregroundColor(sage)
+                Text("♪").font(theme.font(.symbol)).foregroundColor(sage)
             }
         }
         .frame(width: 56, height: 56)
@@ -101,7 +101,7 @@ private struct NowPlayingView: View {
 
     private func toggle() {
         guard info.hasTrack else { return }
-        monitor.togglePlayPause()
+        actions.togglePlayPause()
         override.flip(to: !shownPlaying)
     }
 }

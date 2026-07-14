@@ -7,17 +7,17 @@
 import SwiftUI
 import WixelsKit
 
-struct Owl: Wixel {
+struct Owl: ThemeableWixel {
     let source: OwlSource
 
     static let kind = "owl"
 
     /// Default placement + wiring for the desktop config. See Registry.swift.
-    static func spec() -> WidgetSpec {
-        WidgetSpec(kind: kind,
+    static func spec() -> ThemedWidgetSpec {
+        ThemedWidgetSpec(widget: Self.self,
             defaultPlacement: .init(anchor: .bottomRight, offset: .init(width: 0, height: 150),
                                     size: .init(width: 90, height: 70)),
-            build: { _, _ in erase(Owl(source: OwlSource())) })
+            build: { _, _ in Owl(source: OwlSource()) })
     }
     static let refresh: RefreshPolicy = .interval(7)   // wake within ~7s of return
     static let interactive = true
@@ -53,12 +53,12 @@ struct Owl: Wixel {
                             slit.map { ($0.0, $0.1, Character("D")) })                  // shut + slit
 
     func sample() async -> OwlState { await source.read() }
-    func render(_ s: OwlState, _ p: Palette) -> some View { OwlView(state: s, p: p) }
+    func render(_ s: OwlState, _ theme: ThemeContext) -> some View { OwlView(state: s, theme: theme) }
 }
 
 private struct OwlView: View {
     let state: OwlState
-    let p: Palette
+    let theme: ThemeContext
     @State private var blinking = false
 
     // floating "z" specs while asleep (x from the right, size, timing)
@@ -67,14 +67,10 @@ private struct OwlView: View {
                               .init(x: 52, size: 14, delay: 1.2, dur: 2.8)]
 
     var body: some View {
-        let body = p.c(4)
         let palette: [Character: Color] = [
-            "D": body.shade(0.5).color,
-            "B": body.color,
-            "E": p.foreground.color,     // eye white
-            "p": p.background.color,      // pupil
-            "k": p.c(1).color,            // beak
-            "f": p.c(1).color,            // feet
+            "D": theme.color(.border), "B": theme.color(.accent),
+            "E": theme.color(.foreground), "p": theme.color(.background),
+            "k": theme.color(.warning), "f": theme.color(.warning),
         ]
         let asleep = state == .asleep
         let grid = (blinking || asleep) ? Owl.closed
@@ -98,8 +94,8 @@ private struct OwlView: View {
                 .truncatingRemainder(dividingBy: 1)
             let opacity = phase < 0.2 ? phase / 0.2 * 0.9 : max(0, 0.9 * (1 - (phase - 0.2) / 0.8))
             Text("z")
-                .font(.pixel(z.size))
-                .foregroundColor(p.foreground.color)
+                .font(theme.font(.caption))
+                .foregroundColor(theme.color(.foreground))
                 .offset(x: -z.x, y: -4 - CGFloat(phase) * 20)
                 .opacity(opacity)
         }
