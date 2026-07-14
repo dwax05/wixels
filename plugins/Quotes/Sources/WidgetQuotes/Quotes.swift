@@ -2,8 +2,10 @@
 // tumblr-style meme line. The Übersicht widget rerolled on every wal recolour;
 // here it picks a random line at launch and rerolls on click (interactive).
 //
-// Lines load from quotes.json (the same curated file the Übersicht widget used),
-// overridable with WIXELS_QUOTES. idleStatic: no polling, redraws on palette change.
+// Lines load from a JSON array of strings — set the file via this widget's
+// [widget.options] path in desktop.toml (default ~/.config/wixels/quotes.json),
+// overridable with WIXELS_QUOTES. Missing file → the hardcoded fallback line.
+// idleStatic: no polling, redraws on palette change.
 
 import AppKit
 import SwiftUI
@@ -17,10 +19,12 @@ struct QuoteSource: Sendable {
     static let maxWidth: CGFloat = 196   // bubble text wrap width
     static let fallback = ["the horrors persist but so do i"]
 
-    init() {
+    /// `configPath` is the widget's `[widget.options] path`. Precedence: WIXELS_QUOTES
+    /// env > that config path > the built-in default location.
+    init(path configPath: String? = nil) {
         let path = ProcessInfo.processInfo.environment["WIXELS_QUOTES"]
-            ?? ("~/.dotfiles/theme/profiles/cynaberii/ubersicht/cynaberii-quotes/quotes.json"
-                as NSString).expandingTildeInPath
+            ?? configPath.map { ($0 as NSString).expandingTildeInPath }
+            ?? ("~/.config/wixels/quotes.json" as NSString).expandingTildeInPath
         if let data = FileManager.default.contents(atPath: path),
            let list = try? JSONSerialization.jsonObject(with: data) as? [String], !list.isEmpty {
             quotes = list
@@ -61,7 +65,7 @@ struct Quotes: Wixel {
         WidgetSpec(kind: kind,
             defaultPlacement: .init(anchor: .bottomLeft, offset: .init(width: 300, height: 90),
                                     size: .init(width: 250, height: 150)),
-            build: { _, _ in erase(Quotes(source: QuoteSource())) })
+            build: { _, opts in erase(Quotes(source: QuoteSource(path: opts.string("path")))) })
     }
     static let refresh: RefreshPolicy = .idleStatic
     static let interactive = true

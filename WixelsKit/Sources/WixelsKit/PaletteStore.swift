@@ -18,13 +18,16 @@ public final class PaletteStore: ObservableObject, @unchecked Sendable {
     @Published public var palette: Palette = .fallback
     @Published public var reloadCount = 0
 
-    // WIXELS_COLORS overrides the watched palette file (isolated tests).
-    private let file = ProcessInfo.processInfo.environment["WIXELS_COLORS"]
-        ?? ("~/.cache/wal/colors.json" as NSString).expandingTildeInPath
+    // Watched palette file. Precedence: WIXELS_COLORS env > the config's `[paths]`
+    // colors (passed by the host) > the pywal default.
+    private let file: String
     private var source: DispatchSourceFileSystemObject?
     private var fd: Int32 = -1
 
-    public init() {
+    public init(colorsPath: String? = nil) {
+        file = ProcessInfo.processInfo.environment["WIXELS_COLORS"]
+            ?? colorsPath
+            ?? ("~/.cache/wal/colors.json" as NSString).expandingTildeInPath
         reload()
         watch()
     }

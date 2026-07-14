@@ -6,9 +6,9 @@
 // interpreter and `nowplaying-cli`'s bundled MediaRemoteMini shim get real data.
 // Reimplementing that shim in-process isn't worth it.
 //
-// Instead we read the same shared cache the cynaberii music widgets use:
-// the sketchybar plugin runs ONE nowplaying-cli stream and publishes
-// ~/.cache/cynaberii/nowplaying.json (event-driven + 3s poll). We read
+// Instead we read a shared cache an external publisher writes: a sketchybar plugin
+// runs ONE nowplaying-cli stream and publishes ~/.cache/wixels/nowplaying.json
+// (event-driven + 3s poll; override the path with WIXELS_NOWPLAYING). We read
 // `playbackRate` from it — no per-tick spawn, and consistent with the bar and
 // the other widgets. If the cache is missing/stale, fall back to a direct
 // `nowplaying-cli get playbackRate` (which works where in-process MediaRemote
@@ -73,11 +73,17 @@ public struct PlayOverride {
 }
 
 public final class MusicMonitor: @unchecked Sendable {
-    private let cache = ("~/.cache/cynaberii/nowplaying.json" as NSString).expandingTildeInPath
+    // Cache file the external publisher writes. Precedence: WIXELS_NOWPLAYING env >
+    // the config's `[paths]` nowplaying (passed via Services) > the default.
+    private let cache: String
     private let staleSeconds: TimeInterval = 30
     private let npCLI = "/opt/homebrew/bin/nowplaying-cli"
 
-    public init() {}
+    public init(cachePath: String? = nil) {
+        cache = ProcessInfo.processInfo.environment["WIXELS_NOWPLAYING"]
+            ?? cachePath
+            ?? ("~/.cache/wixels/nowplaying.json" as NSString).expandingTildeInPath
+    }
 
     /// True when something is actively playing (playbackRate > 0).
     public func isPlayingNow() async -> Bool {

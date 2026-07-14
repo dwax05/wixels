@@ -20,19 +20,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var host: WidgetHost!
 
     func applicationDidFinishLaunching(_ note: Notification) {
-        let services = Services()                          // shared samplers (cpu, music)
-        let host = WidgetHost(palette: PaletteStore())
+        // Read the TOML layout (scaffolds a default on first run). Its `[paths]` feed
+        // the shared samplers + palette store; env vars still override (see Config).
+        Config.writeDefaultIfMissing()
+        let cfg = Config.load()
+
+        let services = Services(nowplayingPath: cfg.nowplaying)   // shared samplers (cpu, music)
+        let host = WidgetHost(palette: PaletteStore(colorsPath: cfg.colors))
 
         // Build the spec table entirely from plugin dylibs — every widget is a
         // libWidget*.dylib the loader dlopens and registers (no static built-ins).
         let registrar = Registrar()
         PluginLoader.load(into: registrar)
 
-        // Read the TOML layout (scaffolds a default on first run), then build+mount
-        // each enabled entry in file order (order sets z-stacking among same-level
-        // widgets — frog before clock).
-        Config.writeDefaultIfMissing()
-        for entry in Config.load() {
+        // Mount each enabled entry in file order (order sets z-stacking among
+        // same-level widgets — frog before clock).
+        for entry in cfg.entries {
             guard let spec = registrar.specs[entry.kind] else {
                 FileHandle.standardError.write(Data("wixels: no widget for kind '\(entry.kind)'\n".utf8))
                 continue

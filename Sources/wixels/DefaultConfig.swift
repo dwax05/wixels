@@ -26,6 +26,11 @@ extension Config {
     # anchors: topLeft topRight bottomLeft bottomRight center topCenter
     # A [widget.options] table passes per-widget settings (e.g. disk-snail path).
 
+    # App-global data files. Env vars WIXELS_COLORS / WIXELS_NOWPLAYING override these.
+    [paths]
+    colors     = "~/.cache/wal/colors.json"        # pywal palette — recolours everything
+    nowplaying = "~/.cache/wixels/nowplaying.json" # music cache your publisher writes
+
     [[widget]]
     kind = "sys"
 
@@ -45,6 +50,8 @@ extension Config {
 
     [[widget]]
     kind = "quotes"
+      [widget.options]
+      path = "~/.config/wixels/quotes.json"   # JSON array of quote strings
 
     [[widget]]
     kind = "frog"                # before clock: clock orders in front, hides frog body

@@ -6,6 +6,11 @@
 // minimal block is just `kind = "..."`. Order in the file is mount order (= z-stack
 // among same-level widgets). Unknown kinds are skipped by the resolver in main.
 //
+// A top-level `[paths]` table sets app-global data files (colors = wal palette,
+// nowplaying = music cache); those are threaded into PaletteStore/MusicMonitor in
+// main. Precedence for each: env var (WIXELS_COLORS/WIXELS_NOWPLAYING) > `[paths]` >
+// built-in default. Per-widget files stay in that widget's `[widget.options]`.
+//
 // TOMLKit is confined to this file — the parsed result is plain WixelsKit types
 // (Placement overrides + Options), so plugins never see a TOML dependency.
 
@@ -20,6 +25,15 @@ struct ConfigEntry {
     let kind: String
     let placement: PlacementOverride
     let options: Options
+}
+
+/// The whole parsed config: the widget list plus the app-global `[paths]` (already
+/// tilde-expanded; nil = use the built-in default). Per-widget files (quotes,
+/// disk-snail volume) live in each widget's `[widget.options]`, not here.
+struct LoadedConfig {
+    var entries: [ConfigEntry] = []
+    var colors: String?          // wal palette file (PaletteStore)
+    var nowplaying: String?      // music cache file (MusicMonitor)
 }
 
 /// Placement fields the config may override; nil = keep the spec's default.
@@ -47,25 +61,32 @@ enum Config {
 
     /// Load the config file, falling back to the bundled default when it's missing
     /// or unparseable (logged, never fatal).
-    static func load() -> [ConfigEntry] {
+    static func load() -> LoadedConfig {
         guard let text = try? String(contentsOfFile: path, encoding: .utf8) else {
             warn("no config at \(path) — using built-in default layout")
-            return (try? parse(defaultTOML)) ?? []
+            return (try? parse(defaultTOML)) ?? LoadedConfig()
         }
         do { return try parse(text) }
         catch {
             warn("config parse error (\(error)) — using built-in default layout")
-            return (try? parse(defaultTOML)) ?? []
+            return (try? parse(defaultTOML)) ?? LoadedConfig()
         }
     }
 
-    static func parse(_ text: String) throws -> [ConfigEntry] {
+    static func parse(_ text: String) throws -> LoadedConfig {
         let table = try TOMLTable(string: text)
-        guard let widgets = table["widget"]?.array else { return [] }
-        return Array(widgets).compactMap { item in
+        let paths = table["paths"]?.table
+        let entries: [ConfigEntry] = (table["widget"]?.array).map(Array.init)?.compactMap { item in
             guard let t = item.table, let kind = t["kind"]?.string else { return nil }
             return ConfigEntry(kind: kind, placement: placement(from: t), options: options(from: t))
-        }
+        } ?? []
+        return LoadedConfig(entries: entries,
+                            colors: paths?["colors"]?.string.map(expandTilde),
+                            nowplaying: paths?["nowplaying"]?.string.map(expandTilde))
+    }
+
+    private static func expandTilde(_ s: String) -> String {
+        (s as NSString).expandingTildeInPath
     }
 
     private static func placement(from t: TOMLTable) -> PlacementOverride {

@@ -21,7 +21,7 @@ struct WeatherInfo: Equatable, Sendable {
 final class WeatherSource: DataSource, @unchecked Sendable {
     private var loc: (lat: String, lon: String)?
     private var station: String?
-    private let ua = "cynaberii-weather (wixels)"
+    private let ua = "wixels-weather"
 
     func read() async -> WeatherInfo {
         guard let (lat, lon) = await location() else { return .unknown }

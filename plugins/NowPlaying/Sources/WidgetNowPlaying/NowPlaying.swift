@@ -3,8 +3,8 @@
 // optimistic flip (like the JS override) until the next poll reads the real state.
 //
 // Track data (incl. base64 album art) comes from MusicMonitor, which reads the
-// shared ~/.cache/cynaberii/nowplaying.json the sketchybar music plugin publishes
-// — the same exposed file the Übersicht widget's np.py read.
+// shared nowplaying.json a sketchybar music plugin publishes (default
+// ~/.cache/wixels/nowplaying.json; set via [paths] nowplaying).
 
 import AppKit
 import SwiftUI

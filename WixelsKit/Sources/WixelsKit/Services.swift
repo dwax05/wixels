@@ -10,7 +10,10 @@ import Foundation
 
 @MainActor
 public final class Services {
-    public lazy var music = MusicMonitor()   // pet + now-playing + poster
-    public lazy var cpu = CPUSource()        // pet + stats
-    public init() {}
+    private let nowplayingPath: String?
+    public lazy var music = MusicMonitor(cachePath: nowplayingPath)   // pet + now-playing + poster
+    public lazy var cpu = CPUSource()                                 // pet + stats
+
+    /// `nowplayingPath` comes from the config's `[paths]` (nil = MusicMonitor's default).
+    public init(nowplayingPath: String? = nil) { self.nowplayingPath = nowplayingPath }
 }
