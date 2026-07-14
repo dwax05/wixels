@@ -18,6 +18,7 @@ import WixelsKit
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var host: WidgetHost!
+    private var statusBar: StatusBarController!
 
     func applicationDidFinishLaunching(_ note: Notification) {
         // Read the TOML layout (scaffolds a default on first run). Its `[paths]` feed
@@ -46,6 +47,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         host.run()
         self.host = host
+
+        // Menu bar presence: shows the app is up and toggles widgets at runtime.
+        self.statusBar = StatusBarController(host: host)
     }
 }
 
