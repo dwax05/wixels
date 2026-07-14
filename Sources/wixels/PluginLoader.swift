@@ -6,9 +6,10 @@
 // host and plugin both link the one dynamic WixelsKit, the Registrar and WidgetSpec
 // types have a single runtime identity, so the call is safe.
 //
-// Search order: the running binary's own directory (built-in plugin dylibs land
-// next to the executable in .build/<config>/), then ~/.config/wixels/plugins for
-// user drop-ins. A plugin that fails to load is logged and skipped, never fatal.
+// Search order: the running binary's own directory (build-plugins.sh installs the
+// built-in plugin dylibs next to the executable in build/<config>/), then
+// ~/.config/wixels/plugins for user drop-ins. A plugin that fails to load is logged
+// and skipped, never fatal.
 
 import Foundation
 import WixelsKit
