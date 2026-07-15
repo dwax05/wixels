@@ -11,10 +11,15 @@ Download both matching assets:
 - `Wixels-Cynaberii-0.1.0-arm64.zip` — the separately installed 12-widget Cynaberii
   pack and Cynaberii theme.
 
-Extract the host app, move it to Applications, then right-click it, choose **Open**,
-and confirm the first launch if Gatekeeper asks. Quit Wixels, extract the matching
-extension pack, copy its `plugins/` and `themes/` contents into
-`~/.config/wixels/plugins/` and `~/.config/wixels/themes/`, and restart Wixels.
+Extract the host app and move it to Applications. The beta is ad-hoc signed and not
+notarized, so Gatekeeper blocks the first launch: on macOS 14 right-click the app,
+choose **Open**, and confirm; on macOS 15 or later dismiss the warning, then use
+**System Settings > Privacy & Security > Open Anyway** (the right-click shortcut no
+longer works there). Quit Wixels, extract the matching extension pack, copy its
+`plugins/` and `themes/` contents into `~/.config/wixels/plugins/` and
+`~/.config/wixels/themes/`, clear the download quarantine with
+`xattr -dr com.apple.quarantine ~/.config/wixels` (otherwise Gatekeeper blocks the
+dylibs and widgets stay missing), and restart Wixels.
 The host starts empty by design; its menu and logs explain that extensions are loaded
 separately. Upgrade by replacing both assets together; uninstall by quitting Wixels,
 deleting the app, and optionally deleting the installed extensions and config.
@@ -33,10 +38,11 @@ supported. Please file feedback and diagnostics in
 - Verify the two ZIP checksums, `LICENSE`, `THIRD_PARTY_NOTICES.md`, and the
   MediaRemote license in the appropriate payloads.
 - On a clean macOS 14+ Apple-silicon account, extract and launch the host using the
-  Gatekeeper right-click/Open flow. Verify config creation, empty-host menu guidance,
-  and useful `wixels:` diagnostics.
-- Install the extension pack, restart, and verify all 12 widgets plus the Cynaberii
-  theme load. Test menu toggles, layout editing, config reload, palette/theme fallback,
+  Gatekeeper flow for that OS (macOS 14: right-click/Open; macOS 15+: Privacy &
+  Security "Open Anyway"). Verify config creation, empty-host menu guidance, and
+  useful `wixels:` diagnostics.
+- Install the extension pack including the quarantine-clearing `xattr` step, restart,
+  and verify all 12 widgets plus the Cynaberii theme load. Test menu toggles, layout editing, config reload, palette/theme fallback,
   Weather while offline, and idle media widgets.
 - Confirm any screenshots/GIFs accurately represent the beta and that the worktree
   has no accidental build artifacts before publishing both assets and these notes.

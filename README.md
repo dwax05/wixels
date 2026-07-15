@@ -44,12 +44,27 @@ two matching Apple-silicon assets: `Wixels-X.Y.Z-arm64.zip` (the host app) and
 `Wixels-Cynaberii-X.Y.Z-arm64.zip` (the widgets and theme). Always replace both with
 assets from the same release when upgrading.
 
-Extract the host ZIP and move `Wixels.app` to Applications. It is ad-hoc signed, so
-macOS may ask you to right-click the app, choose **Open**, and confirm the first
-launch. The host intentionally contains no widgets. Extract the matching extension
-pack and follow its `INSTALL.md`: copy its `plugins/` files to
-`~/.config/wixels/plugins/` and `themes/` files to `~/.config/wixels/themes/`, then
-restart Wixels. Until that restart, the menu says that no widgets are installed.
+Extract the host ZIP and move `Wixels.app` to Applications. It is ad-hoc signed and
+not notarized, so Gatekeeper blocks the first launch:
+
+- **macOS 14 (Sonoma):** right-click the app, choose **Open**, and confirm.
+- **macOS 15 (Sequoia) or later:** double-click once and dismiss the warning, then
+  open **System Settings > Privacy & Security**, scroll to "Wixels was blocked",
+  click **Open Anyway**, and confirm. The right-click **Open** shortcut no longer
+  works for unnotarized apps on Sequoia.
+
+The host intentionally contains no widgets. Extract the matching extension pack and
+follow its `INSTALL.md`: copy its `plugins/` files to `~/.config/wixels/plugins/` and
+`themes/` files to `~/.config/wixels/themes/`, then clear the download quarantine so
+Gatekeeper does not block the dylibs when Wixels loads them:
+
+```sh
+xattr -dr com.apple.quarantine ~/.config/wixels
+```
+
+Restart Wixels afterwards. Until that restart, the menu says that no widgets are
+installed; if widgets are still missing after it, the quarantine step above is the
+usual cause.
 
 To uninstall, quit Wixels, delete the app, and optionally remove
 `~/.config/wixels/plugins/libWidget*.dylib`,
