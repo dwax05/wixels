@@ -138,7 +138,7 @@ struct Weather: ThemeableWixel {
     static func spec() -> ThemedWidgetSpec {
         ThemedWidgetSpec(widget: Self.self,
             defaultPlacement: .init(anchor: .topRight, offset: .init(width: 0, height: -60),
-                                    size: .init(width: 130, height: 150), align: .trailing),
+                                    size: .init(width: 130, height: 150), align: .trailing, sizing: .fitContent),
             build: { _, _ in Weather(source: WeatherSource()) })
     }
     static let refresh: RefreshPolicy = .interval(900)   // 15 min; data effectively cached

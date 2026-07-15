@@ -42,8 +42,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var host: WidgetHost!
     private var statusBar: StatusBarController!
     private var watcher: ConfigWatcher?
+    private var gallery: PreviewGalleryController?
 
     func applicationDidFinishLaunching(_ note: Notification) {
+        if CommandLine.arguments.contains("--gallery") {
+            PluginLoader.load(into: registrar, excluding: Quarantine.resolveUserExtensions())
+            let gallery = PreviewGalleryController(registrar: registrar)
+            self.gallery = gallery
+            gallery.show()
+            return
+        }
         Config.writeDefaultIfMissing()
         // Downloaded extension files are quarantined; ask once and clear before any
         // dlopen so approved widgets load in this launch without a restart.

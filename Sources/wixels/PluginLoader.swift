@@ -79,22 +79,25 @@ enum PluginLoader {
     static func runTestSuite() -> Int32 {
         let registrar = Registrar()
         load(into: registrar)
-        let expected: Set<String> = ["sys", "nowplaying", "disk-snail", "pet", "plant", "quotes",
-                                     "frog", "clock", "stats", "owl", "weather", "poster"]
+        let suite = ProcessInfo.processInfo.environment["WIXELS_WIDGET_SUITE"]
+        let expected: Set<String> = switch suite {
+        case "Macos": ["clock", "stats", "weather", "nowplaying", "reminders", "poster"]
+        default: ["sys", "nowplaying", "disk-snail", "pet", "plant", "quotes",
+                  "frog", "clock", "stats", "owl", "weather", "poster"]
+        }
         let loaded = Set(registrar.specs.keys).union(registrar.themedSpecs.keys)
         let missing = expected.subtracting(loaded)
         guard missing.isEmpty else {
             print("FAIL bundled plugins did not load: \(missing.sorted().joined(separator: ", "))")
             return 1
         }
-        let suite = ProcessInfo.processInfo.environment["WIXELS_WIDGET_SUITE"]
         let expectedThemes = suite.map { Set([$0.lowercased()]) } ?? Set(["macos", "cynaberii"])
         let missingThemes = expectedThemes.subtracting(registrar.themes.keys)
         guard missingThemes.isEmpty else {
             print("FAIL bundled themes did not load: \(missingThemes.sorted().joined(separator: ", "))")
             return 1
         }
-        print("PASS 12 bundled plugins and \(expectedThemes.count) theme(s) load at runtime")
+        print("PASS \(expected.count) bundled plugins and \(expectedThemes.count) theme(s) load at runtime")
         return 0
     }
 }

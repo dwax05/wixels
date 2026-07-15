@@ -19,7 +19,7 @@ struct Plant: ThemeableWixel {
     static func spec() -> ThemedWidgetSpec {
         ThemedWidgetSpec(widget: Self.self,
             defaultPlacement: .init(anchor: .topLeft, offset: .init(width: 40, height: -220),
-                                    size: .init(width: 120, height: 130)),
+                                    size: .init(width: 120, height: 130), sizing: .fitContent),
             build: { _, _ in Plant() })
     }
     static let refresh: RefreshPolicy = .idleStatic

@@ -34,12 +34,44 @@ public struct ThemedWidgetSpec: Sendable {
     public let kind: String
     public let defaultPlacement: Placement
     let build: @MainActor @Sendable (Services, Options, ThemeDefinition) -> any MountableWidget
+    let previews: @MainActor @Sendable (Services, ThemeDefinition) -> [RegisteredWidgetPreview]
+
+    /// Preserves the original plugin ABI for already-compiled themed widgets.
+    public init<W: ThemeableWixel>(widget: W.Type, defaultPlacement: Placement,
+                                   build: @escaping @MainActor @Sendable (Services, Options) -> W) {
+        self.init(widget: widget, defaultPlacement: defaultPlacement, previews: [], build: build)
+    }
 
     public init<W: ThemeableWixel>(widget: W.Type, defaultPlacement: Placement,
+                                   previews: [WidgetPreview<W.Sample>] = [],
                                    build: @escaping @MainActor @Sendable (Services, Options) -> W) {
         kind = W.kind; self.defaultPlacement = defaultPlacement
         self.build = { services, options, theme in eraseThemed(build(services, options), theme: theme) }
+        self.previews = { services, theme in
+            previews.map { preview in
+                let widget = build(services, .empty)
+                return RegisteredWidgetPreview(kind: W.kind, name: preview.name,
+                    placement: defaultPlacement, view: AnyView(widget.render(preview.sample,
+                        ThemeContext(definition: theme, palette: theme.defaultPalette))))
+            }
+        }
     }
+}
+
+/// A deterministic fixture rendered through a widget's normal `render` method.
+/// Keep previews free of I/O so gallery and tests never observe machine state.
+public struct WidgetPreview<Sample: Equatable & Sendable>: Sendable {
+    public let name: String
+    public let sample: Sample
+    public init(_ name: String, sample: Sample) { self.name = name; self.sample = sample }
+}
+
+@MainActor
+public struct RegisteredWidgetPreview {
+    public let kind: String
+    public let name: String
+    public let placement: Placement
+    public let view: AnyView
 }
 
 public struct ResolvedThemedWidget {
@@ -100,6 +132,13 @@ public final class Registrar: @unchecked Sendable {
         let theme = resolveTheme(themeID)
         return ResolvedThemedWidget(widget: spec.build(services, options, theme),
             placement: spec.defaultPlacement, themeID: theme.manifest.id)
+    }
+
+    /// Developer tooling only. Production mounting never evaluates preview fixtures.
+    @MainActor public func registeredPreviews(services: Services,
+                                               themeID: String? = nil) -> [RegisteredWidgetPreview] {
+        let theme = resolveTheme(themeID)
+        return themedSpecs.keys.sorted().flatMap { themedSpecs[$0]!.previews(services, theme) }
     }
 }
 

@@ -63,7 +63,7 @@ struct Quotes: ThemeableWixel {
     static func spec() -> ThemedWidgetSpec {
         ThemedWidgetSpec(widget: Self.self,
             defaultPlacement: .init(anchor: .bottomLeft, offset: .init(width: 300, height: 90),
-                                    size: .init(width: 250, height: 150)),
+                                    size: .init(width: 250, height: 150), sizing: .fitContent),
             build: { _, opts in Quotes(source: QuoteSource(path: opts.string("path"))) })
     }
     static let refresh: RefreshPolicy = .idleStatic

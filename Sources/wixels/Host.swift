@@ -14,6 +14,7 @@ import WixelsKit
 /// interaction outside edit mode.
 final class LayoutHostingView<Content: View>: NSHostingView<Content> {
     var layoutEditing = false
+    var contentSizeDidChange: ((CGSize) -> Void)?
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
@@ -23,6 +24,16 @@ final class LayoutHostingView<Content: View>: NSHostingView<Content> {
         } else {
             super.mouseDown(with: event)
         }
+    }
+
+    override func layout() {
+        super.layout()
+        let size = intrinsicContentSize
+        guard size.width > 0, size.height > 0 else { return }
+        // A sample may replace a zero-sized SwiftUI placeholder without changing
+        // this view's fixed fallback intrinsic size. Report that layout too: the
+        // host uses it to enable intrinsic sizing only after a real sample exists.
+        contentSizeDidChange?(size)
     }
 }
 
@@ -55,6 +66,7 @@ private struct Mount {
     var offset: CGSize       // var: edit mode rewrites it on drop
     let defaultPlacement: Placement
     let size: CGSize
+    let sizing: PlacementSizing
     let interactive: Bool
     let zBoost: Int          // nudges the window level up so it stacks above peers
     let align: Alignment?    // pins content to a window edge (else NSHostingView centers)
@@ -90,6 +102,8 @@ struct LayoutSnapshot: Equatable {
     let configIndex: Int
     let kind: String
     let interactive: Bool
+    let anchor: WixelsKit.Anchor
+    let sizing: PlacementSizing
     let frame: NSRect
 }
 
@@ -138,7 +152,7 @@ final class WidgetHost {
             ticker: widget.makeTicker(),
             anchor: p.anchor, offset: p.offset,
             defaultPlacement: defaultPlacement,
-            size: p.size,
+            size: p.size, sizing: p.sizing,
             interactive: widget.interactive, zBoost: p.zBoost, align: p.align,
             kind: widget.kind, configIndex: configIndex,
             makeView: { widget.makeView($0) }
@@ -152,7 +166,8 @@ final class WidgetHost {
         mounts.compactMap { mount in
             mount.window.map {
                 LayoutSnapshot(configIndex: mount.configIndex, kind: mount.kind,
-                               interactive: mount.interactive, frame: $0.frame)
+                               interactive: mount.interactive, anchor: mount.anchor,
+                               sizing: mount.sizing, frame: $0.frame)
             }
         }
     }
@@ -190,6 +205,7 @@ final class WidgetHost {
     private var editKeyMonitor: Any?    // local keyDown monitor (Enter=save, Esc=discard)
     private var editKeyWindow: NSPanel? // ephemeral key panel so the app receives keys
     private var editMoveObserver: (any NSObjectProtocol)?
+    private var editPreviousApplication: NSRunningApplication?
 
     /// Enter drag-to-reposition mode. Brings every widget forward, makes it draggable by
     /// its background, and outlines it so transparent widgets are grabbable. Exit via
@@ -211,7 +227,9 @@ final class WidgetHost {
             }
             mounts[i].anchor = defaults.anchor
             mounts[i].offset = defaults.offset
-            mounts[i].window?.setFrameOrigin(origin(for: mounts[i]))
+            if let window = mounts[i].window {
+                window.setFrameOrigin(origin(for: mounts[i], size: window.frame.size))
+            }
             changes.append(.init(configIndex: mounts[i].configIndex,
                                  anchor: mounts[i].anchor,
                                  offset: mounts[i].offset))
@@ -255,6 +273,9 @@ final class WidgetHost {
     /// stealing focus; a local monitor turns Enter into save-and-exit, Escape into discard.
     private func installEditKeyCapture() {
         // Activate the (accessory) app and give it a key window so keyDown routes here.
+        let foreground = NSWorkspace.shared.frontmostApplication
+        editPreviousApplication = foreground?.processIdentifier == ProcessInfo.processInfo.processIdentifier
+            ? nil : foreground
         NSApp.activate(ignoringOtherApps: true)
         let vf = NSScreen.main?.visibleFrame ?? .init(x: 0, y: 0, width: 100, height: 100)
         let panel = InteractivePanel(contentRect: .init(x: vf.minX, y: vf.minY, width: 1, height: 1),
@@ -292,6 +313,15 @@ final class WidgetHost {
         if let m = editKeyMonitor { NSEvent.removeMonitor(m); editKeyMonitor = nil }
         if let o = editMoveObserver { NotificationCenter.default.removeObserver(o); editMoveObserver = nil }
         editKeyWindow?.orderOut(nil); editKeyWindow = nil
+        // Entering layout mode activates this accessory app so its hidden key panel
+        // can receive Return/Escape. Leaving it active keeps ownership of menu-bar
+        // focus, which prevents an auto-hidden menu bar from revealing until macOS
+        // changes Spaces. Restore the actual foreground app when possible; merely
+        // deactivating has no effect if Wixels is the sole active app.
+        let previous = editPreviousApplication
+        editPreviousApplication = nil
+        if let previous, !previous.isTerminated { _ = previous.activate(options: []) }
+        else { NSApp.deactivate() }
     }
 
     private func enterEdit(_ m: inout Mount) {
@@ -325,7 +355,7 @@ final class WidgetHost {
             m.editState = nil
             return nil
         }
-        let base = anchoredBase(anchor: m.anchor, size: m.size)
+        let base = anchoredBase(anchor: m.anchor, size: w.frame.size)
         let o = w.frame.origin
         let newOffset = CGSize(width: (o.x - base.x).rounded(), height: (o.y - base.y).rounded())
 
@@ -351,15 +381,23 @@ final class WidgetHost {
     }
 
     private var occlusionObserver: (any NSObjectProtocol)?
+    private var activationObserver: (any NSObjectProtocol)?
     private var paletteObserver: AnyCancellable?
 
     func run() {
         for i in mounts.indices {
             let w = makeWindow(mounts[i])
             mounts[i].window = w
+            if mounts[i].sizing == .fitContent {
+                mounts[i].ticker.setContentUpdateHandler { [weak self, weak w] in
+                    guard let self, let w else { return }
+                    self.measureFitContentWindow(w)
+                }
+            }
             scheduler.add(mounts[i].ticker)
         }
         observeOcclusion()
+        observeAppActivation()
         observePalette()
         scheduler.start()
         print("wixels up — \(mounts.count) widget(s). Try `wal -R` to recolour. Ctrl-C to quit.")
@@ -373,6 +411,9 @@ final class WidgetHost {
         scheduler.stop()
         if let o = occlusionObserver {
             NotificationCenter.default.removeObserver(o); occlusionObserver = nil
+        }
+        if let o = activationObserver {
+            NotificationCenter.default.removeObserver(o); activationObserver = nil
         }
         paletteObserver?.cancel(); paletteObserver = nil
         palette.stop()
@@ -419,16 +460,28 @@ final class WidgetHost {
         }
     }
 
+    /// Returning from System Settings after granting Calendar or Reminders access
+    /// must redraw immediately. Normal EventKit polling is deliberately sparse, so
+    /// without this hook a permission card could linger for up to two minutes.
+    private func observeAppActivation() {
+        activationObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification, object: NSApp, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.scheduler.refreshOnce() }
+        }
+    }
+
     private func makeWindow(_ m: Mount) -> NSWindow {
         let frame = NSRect(origin: .zero, size: m.size)
-        // align pins the content to a window edge (else NSHostingView centers it,
-        // which lets equal-anchored cards land at different edges by window width).
+        // Fixed windows may pin content to an edge. A fit-content window already is
+        // its visible content boundary, so expanding it for alignment would defeat
+        // the purpose.
         let base = m.makeView(palette)
-        let root: AnyView = m.align.map {
+        let root: AnyView = (m.sizing == .fixed ? m.align : nil).map {
             AnyView(base.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: $0))
         } ?? base
         let w: NSWindow
-        let host: NSHostingView<AnyView>
+        let host: LayoutHostingView<AnyView>
         if m.interactive {
             // non-activating panel so clicks land without focus theft
             let panel = InteractivePanel(
@@ -444,12 +497,25 @@ final class WidgetHost {
             w = DesktopWindow(contentRect: frame, styleMask: [.borderless],
                               backing: .buffered, defer: false)
         }
-        // Placement sizes are authoritative. NSHostingView otherwise publishes its
-        // SwiftUI intrinsic size back to AppKit after the window is shown, shrinking
-        // the frame while preserving its top edge. A later reset then anchors using
-        // the declared size and appears to push only the shrunken widgets downward.
+        // Fixed placements keep their declared frame. Fit-content placements retain
+        // that frame only until SwiftUI has laid out the first rendered view.
         host.sizingOptions = []
         host.frame = frame
+        if m.sizing == .fitContent {
+            host.contentSizeDidChange = { [weak self, weak w, ticker = m.ticker, weak host] size in
+                guard ticker.hasSample, let self, let w else { return }
+                guard let host else { return }
+                if host.sizingOptions.isEmpty {
+                    host.sizingOptions = [.intrinsicContentSize]
+                    DispatchQueue.main.async { [weak self, weak w, weak host] in
+                        guard let self, let w, let host else { return }
+                        self.resizeFitContentWindow(w, to: host.fittingSize)
+                    }
+                    return
+                }
+                self.resizeFitContentWindow(w, to: size)
+            }
+        }
         w.contentView = host
         w.isOpaque = false
         w.backgroundColor = .clear
@@ -477,13 +543,30 @@ final class WidgetHost {
             : Int(CGWindowLevelForKey(.desktopWindow))
         w.level = NSWindow.Level(rawValue: baseLevel + m.zBoost)
         w.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
-        w.setFrameOrigin(origin(for: m))
+        w.setFrameOrigin(origin(for: m, size: frame.size))
         w.orderFront(nil)
         return w
     }
 
-    private func origin(for m: Mount) -> NSPoint {
-        let base = anchoredBase(anchor: m.anchor, size: m.size)
+    private func resizeFitContentWindow(_ window: NSWindow, to size: CGSize) {
+        guard let index = mounts.firstIndex(where: { $0.window === window }),
+              mounts[index].sizing == .fitContent,
+              size != window.frame.size else { return }
+        let origin = origin(for: mounts[index], size: size)
+        window.setFrame(NSRect(origin: origin, size: size), display: true)
+    }
+
+    private func measureFitContentWindow(_ window: NSWindow) {
+        guard let host = window.contentView as? LayoutHostingView<AnyView> else { return }
+        if host.sizingOptions.isEmpty { host.sizingOptions = [.intrinsicContentSize] }
+        DispatchQueue.main.async { [weak self, weak window, weak host] in
+            guard let self, let window, let host else { return }
+            self.resizeFitContentWindow(window, to: host.fittingSize)
+        }
+    }
+
+    private func origin(for m: Mount, size: CGSize? = nil) -> NSPoint {
+        let base = anchoredBase(anchor: m.anchor, size: size ?? m.size)
         return NSPoint(x: base.x + m.offset.width, y: base.y + m.offset.height)
     }
 
