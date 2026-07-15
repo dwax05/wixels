@@ -87,6 +87,8 @@ public actor MusicMonitor {
     private let adapterScript: URL?
     private let adapterFramework: URL?
     private var cached: (snapshot: Snapshot, sampledAt: Date)?
+    private var streamProcess: Process?
+    private var streamTask: Task<Void, Never>?
     private var didLogFailure = false
 
     /// `resourceRoot` is injected by tests; production finds either the source
@@ -120,15 +122,66 @@ public actor MusicMonitor {
     public func toggleShuffle() { send(command: 6) }
 
     private func snapshot() -> Snapshot {
-        if let cached, Date().timeIntervalSince(cached.sampledAt) < 1 {
-            return cached.snapshot
+        startStreamIfNeeded()
+        return cached?.snapshot ?? .idle
+    }
+
+    /// Keep one adapter process open and receive MediaRemote notifications as they
+    /// happen. The old `get` path launched Perl for every widget refresh (roughly
+    /// 30 processes/minute with the default desktop); widgets now read this cache.
+    private func startStreamIfNeeded() {
+        guard streamProcess == nil,
+              let script = adapterScript, let framework = adapterFramework,
+              FileManager.default.isExecutableFile(atPath: "/usr/bin/perl"),
+              FileManager.default.fileExists(atPath: script.path),
+              FileManager.default.fileExists(atPath: framework.path)
+        else { return }
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/perl")
+        // Full snapshots avoid diff-merging state in the host. A short debounce
+        // collapses the burst of metadata fields most players emit on track change.
+        process.arguments = [script.path, framework.path, "stream", "--no-diff", "--debounce=200"]
+        process.standardError = FileHandle.nullDevice
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        do {
+            try process.run()
+        } catch {
+            logFailure("could not start MediaRemoteAdapter stream: \(error.localizedDescription)")
+            return
         }
-        guard let data = run(["get"]),
-              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-        else {
-            cached = (.idle, Date())
-            return .idle
+
+        streamProcess = process
+        streamTask = Task { [weak self, pipe, weak process] in
+            do {
+                for try await line in pipe.fileHandleForReading.bytes.lines {
+                    await self?.acceptStreamLine(line)
+                }
+            } catch {
+                // Process termination closes the pipe; the next widget read starts
+                // a replacement stream if the adapter is available again.
+            }
+            await self?.streamDidEnd(process)
         }
+    }
+
+    private func acceptStreamLine(_ line: String) {
+        guard let data = line.data(using: .utf8),
+              let envelope = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              envelope["type"] as? String == "data"
+        else { return }
+        let payload = envelope["payload"] as? [String: Any] ?? [:]
+        cached = (Self.decode(payload), Date())
+    }
+
+    private func streamDidEnd(_ process: Process?) {
+        guard streamProcess === process else { return }
+        streamProcess = nil
+        streamTask = nil
+    }
+
+    private static func decode(_ object: [String: Any]) -> Snapshot {
         func text(_ key: String) -> String {
             let value = (object[key] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             return value == "null" ? "" : value
@@ -143,7 +196,6 @@ public actor MusicMonitor {
         let playing = (reportedPlaying ?? (number("playing") > 0)) || number("playbackRate") > 0
         let value = Snapshot(title: text("title"), artist: text("artist"), album: text("album"),
                              duration: text("duration"), playing: playing, art: text("artworkData"))
-        cached = (value, Date())
         return value
     }
 
@@ -160,31 +212,6 @@ public actor MusicMonitor {
         try? process.run()
     }
 
-    private func run(_ arguments: [String]) -> Data? {
-        guard let script = adapterScript, let framework = adapterFramework,
-              FileManager.default.isExecutableFile(atPath: "/usr/bin/perl"),
-              FileManager.default.fileExists(atPath: script.path),
-              FileManager.default.fileExists(atPath: framework.path)
-        else { logFailure("embedded MediaRemoteAdapter resources are missing"); return nil }
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/perl")
-        process.arguments = [script.path, framework.path] + arguments
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = FileHandle.nullDevice
-        do { try process.run() } catch {
-            logFailure("could not start MediaRemoteAdapter: \(error.localizedDescription)")
-            return nil
-        }
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-        guard process.terminationStatus == 0 else {
-            logFailure("MediaRemoteAdapter exited with status \(process.terminationStatus)")
-            return nil
-        }
-        return data
-    }
-
     private func logFailure(_ message: String) {
         guard !didLogFailure else { return }
         didLogFailure = true
@@ -195,6 +222,11 @@ public actor MusicMonitor {
         guard let secs = Double(s), secs > 0 else { return "" }
         let t = Int(secs)
         return "\(t / 60):" + String(format: "%02d", t % 60)
+    }
+
+    deinit {
+        streamTask?.cancel()
+        streamProcess?.terminate()
     }
 
 }

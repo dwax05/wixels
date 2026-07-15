@@ -88,7 +88,7 @@ private struct OwlView: View {
 
     // a "z" rising and fading, like the JS owl-z animation
     private func zLetter(_ z: ZSpec) -> some View {
-        TimelineView(.animation) { ctx in
+        TimelineView(.periodic(from: .now, by: 1.0 / 8.0)) { ctx in
             let t = ctx.date.timeIntervalSinceReferenceDate
             let phase = (((t - z.delay) / z.dur).truncatingRemainder(dividingBy: 1) + 1)
                 .truncatingRemainder(dividingBy: 1)

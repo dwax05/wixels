@@ -133,7 +133,7 @@ private struct Sway: ViewModifier {
         if frozen {
             content
         } else {
-            TimelineView(.animation) { ctx in
+            TimelineView(.periodic(from: .now, by: 1.0 / 8.0)) { ctx in
                 let t = ctx.date.timeIntervalSinceReferenceDate
                 let angle = 3 * sin(t / period * 2 * .pi)
                 content.rotationEffect(.degrees(angle), anchor: .top)
