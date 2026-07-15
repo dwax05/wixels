@@ -1,5 +1,9 @@
 # Wixels
 
+<p align="center">
+  <img src="docs/images/pet-cat.gif" alt="Animated pixel-art cat pet widget bobbing on the desktop with music notes floating beside it" width="200">
+</p>
+
 Wixels puts small pixel-art widgets on your macOS desktop. Clocks, system gauges,
 pets, plants, weather, music, and other ambient details live behind your windows,
 so your desktop can be useful without becoming another app to manage.
