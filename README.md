@@ -247,21 +247,21 @@ override.
 To create an Apple-silicon app and ZIP for personal sharing:
 
 ```sh
-./package-app.sh 0.1.1
+./package-app.sh 0.1.4
 ```
 
 The output is written to `dist/Wixels.app` and
-`dist/Wixels-0.1.1-arm64.zip`.
+`dist/Wixels-0.1.4-arm64.zip`.
 
 Build the matching public extension asset separately:
 
 ```sh
-./package-extension-pack.sh 0.1.1
+./package-extension-pack.sh 0.1.4
 ```
 
-This writes `dist/Wixels-Cynaberii-0.1.1/` and
-`dist/Wixels-Cynaberii-0.1.1-arm64.zip`. Release both ZIPs together. See
-[`docs/release-v0.1.1.md`](docs/release-v0.1.1.md) for the release checklist and
+This writes `dist/Wixels-Cynaberii-0.1.4/` and
+`dist/Wixels-Cynaberii-0.1.4-arm64.zip`. Release both ZIPs together. See
+[`docs/release-v0.1.4.md`](docs/release-v0.1.4.md) for the release checklist and
 copy-ready notes.
 
 `swift build` builds only the host. Widget implementations live in explicit suites:
@@ -285,7 +285,7 @@ safe even when their widgets use the same filenames.
 
 ```sh
 WIXELS_WIDGET_SUITE=Cynaberii ./build-plugins.sh debug
-WIXELS_BUNDLED_WIDGET_SUITE=Cynaberii ./package-app.sh 0.1.1
+WIXELS_BUNDLED_WIDGET_SUITE=Cynaberii ./package-app.sh 0.1.4
 ```
 
 The release packager bundles no extensions by default. It never loads or packages
