@@ -55,7 +55,7 @@ class LoopLayerView: NSView {
         let now = Date.timeIntervalSinceReferenceDate
         for (index, track) in tracks.enumerated() where track.duration > 0 && !track.values.isEmpty {
             let animation = CAKeyframeAnimation(keyPath: keyPath(for: track.property))
-            animation.values = track.values.map { converted($0, property: track.property) }
+            animation.values = track.values.map { caTrackValue($0, property: track.property) }
             animation.keyTimes = (track.keyTimes ?? evenTimes(track.values.count)).map(NSNumber.init(value:))
             animation.duration = track.duration
             animation.repeatCount = .infinity
@@ -120,8 +120,14 @@ class LoopLayerView: NSView {
 private func keyPath(for property: LoopTrack.Property) -> String {
     switch property { case .offsetX: "transform.translation.x"; case .offsetY: "transform.translation.y"; case .opacity: "opacity"; case .rotationDegrees: "transform.rotation.z"; case .scale: "transform.scale"; case .scaleX: "transform.scale.x"; case .scaleY: "transform.scale.y" }
 }
-private func converted(_ value: Double, property: LoopTrack.Property) -> NSNumber {
-    NSNumber(value: property == .rotationDegrees ? value * .pi / 180 : value)
+/// Converts SwiftUI-space values to Core Animation's default, unflipped layer
+/// coordinates. SwiftUI treats positive Y as down; CALayer treats it as up.
+func caTrackValue(_ value: Double, property: LoopTrack.Property) -> NSNumber {
+    switch property {
+    case .rotationDegrees: NSNumber(value: value * .pi / 180)
+    case .offsetY: NSNumber(value: -value)
+    default: NSNumber(value: value)
+    }
 }
 private func evenTimes(_ count: Int) -> [Double] { guard count > 1 else { return [0] }; return (0..<count).map { Double($0) / Double(count - 1) } }
 private func positiveModulo(_ value: Double, _ modulus: Double) -> Double { let r = value.truncatingRemainder(dividingBy: modulus); return r < 0 ? r + modulus : r }

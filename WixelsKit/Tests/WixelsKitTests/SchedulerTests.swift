@@ -1,16 +1,27 @@
-import WixelsKit
+@testable import WixelsKit
 import SwiftUI
 import Foundation
 
 @MainActor
 enum SchedulerTests {
     static func run() async throws {
+        try coreAnimationYTranslationMatchesSwiftUI()
         try await startTicksActiveWidgetsAccordingToTheirRefreshPolicy()
         try await refreshOnceOnlyTicksActiveIdleStaticWidgets()
         try await overlappingPetReadsRemainValid()
         try universalThemeRegistryResolvesAndPreservesPlacement()
         try paletteLayersResolvePerTheme()
         print("PASS scheduler suite")
+    }
+
+    /// SwiftUI's positive Y points down while a default CALayer's points up.
+    /// This boundary test prevents decorative effects from being vertically
+    /// mirrored when their SwiftUI offsets become CA transform tracks.
+    private static func coreAnimationYTranslationMatchesSwiftUI() throws {
+        try check(caTrackValue(-12, property: .offsetY).doubleValue == 12,
+                  "negative SwiftUI Y rises in Core Animation")
+        try check(caTrackValue(12, property: .offsetY).doubleValue == -12,
+                  "positive SwiftUI Y falls in Core Animation")
     }
 
     private static func universalThemeRegistryResolvesAndPreservesPlacement() throws {
