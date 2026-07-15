@@ -178,11 +178,11 @@ public extension ThemeDefinition {
             border: .pywal(4), shadow: .pywal(3)), typography: .cynaberii,
         card: .init(fill: .color(.pywalBackground), shape: .rectangle, borderWidth: 4, shadowX: 4, shadowY: 4),
         mediaShape: .rectangle, metrics: .init(spacingScale: 1, paddingScale: 1)),
-        defaultPalette: .init(background: RGB(10, 25, 25), foreground: RGB(193, 197, 197), accents: [
-            RGB(24, 48, 48), RGB(190, 76, 76), RGB(111, 166, 122), RGB(222, 177, 82),
-            RGB(91, 151, 201), RGB(183, 119, 184), RGB(100, 181, 181), RGB(220, 224, 217),
-            RGB(82, 108, 108), RGB(212, 96, 96), RGB(139, 190, 143), RGB(237, 199, 112),
-            RGB(124, 177, 220), RGB(205, 145, 207), RGB(134, 207, 207), RGB(236, 239, 231)
+        defaultPalette: .init(background: RGB(22, 16, 39), foreground: RGB(196, 195, 201), accents: [
+            RGB(22, 16, 39), RGB(137, 108, 156), RGB(135, 118, 171), RGB(126, 129, 174),
+            RGB(151, 145, 174), RGB(167, 149, 211), RGB(192, 191, 197), RGB(196, 195, 201),
+            RGB(101, 95, 117), RGB(137, 108, 156), RGB(135, 118, 171), RGB(126, 129, 174),
+            RGB(151, 145, 174), RGB(167, 149, 211), RGB(192, 191, 197), RGB(196, 195, 201)
         ]))
 }
 
