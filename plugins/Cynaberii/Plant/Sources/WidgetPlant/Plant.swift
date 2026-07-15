@@ -28,6 +28,13 @@ struct Plant: ThemeableWixel {
     static let nStages = 4
     static let waterSeconds = 0.75
     static let px: CGFloat = 5
+    // Preserve the Übersicht plant's surprise blooms. Yellow is intentionally
+    // excluded so the fixed centre always reads as a separate pixel cluster.
+    static let flowerColors = ["FF6B9D", "C46FFF", "FF8C42", "5EC8FF", "FF5C5C", "F4F4F4", "FF9ECD"]
+        .map(RGB.from)
+    static let flowerCenter = RGB.from("FFD23F")
+    static let stem = RGB.from("5F9E4F")
+    static let leaf = RGB.from("7CC15F")
 
     // 13-wide grid. s stem · l leaf · f petal · x centre · r rim · m soil · p pot
     private static let e = "............."
@@ -58,13 +65,12 @@ private struct PlantView: View {
     @State private var watering = false
 
     var body: some View {
-        let flowerRoles: [ThemeSemanticColor] = [.negative, .warning, .accent, .alternateAccent]
-        let flower = theme.color(flowerRoles[flowerIdx % flowerRoles.count])
+        let flower = Plant.flowerColors[flowerIdx % Plant.flowerColors.count].color
         let palette: [Character: Color] = [
             "r": theme.color(.accent), "m": theme.color(.negative),
             "p": theme.color(.alternateAccent),
-            "s": theme.color(.positive), "l": theme.color(.positive),
-            "f": flower, "x": theme.color(.warning),
+            "s": Plant.stem.color, "l": Plant.leaf.color,
+            "f": flower, "x": Plant.flowerCenter.color,
         ]
         let grid = Plant.stages[stage] + Plant.pot
 
@@ -88,7 +94,7 @@ private struct PlantView: View {
         watering = true
         DispatchQueue.main.asyncAfter(deadline: .now() + Plant.waterSeconds) {
             let next = (stage + 1) % Plant.nStages
-            if next == Plant.nStages - 1 { flowerIdx = Int.random(in: 0..<4) }
+            if next == Plant.nStages - 1 { flowerIdx = Int.random(in: 0..<Plant.flowerColors.count) }
             stage = next
             watering = false
         }
