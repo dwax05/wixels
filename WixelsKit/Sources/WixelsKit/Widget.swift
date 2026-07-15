@@ -161,12 +161,13 @@ final class ThemedWidgetModel<W: ThemeableWixel>: ObservableObject, WidgetTicker
     func tick() async { let next = await widget.sample(); if next != sample { sample = next } }
     func view(_ palette: Palette) -> AnyView {
         guard let sample else { return AnyView(Color.clear) }
-        return AnyView(widget.render(sample, ThemeContext(definition: theme, palette: palette)))
+        return AnyView(widget.render(sample, ThemeContext(definition: theme,
+            palette: palette)))
     }
 }
 
 struct ThemedWidgetView<W: ThemeableWixel>: View {
     @ObservedObject var model: ThemedWidgetModel<W>
     @ObservedObject var palette: PaletteStore
-    var body: some View { model.view(palette.palette) }
+    var body: some View { model.view(palette.resolvedPalette(for: model.theme)) }
 }

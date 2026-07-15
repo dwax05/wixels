@@ -103,8 +103,10 @@ public struct ThemeTokens: Sendable, Equatable {
     }
 }
 public struct ThemeDefinition: Sendable, Equatable {
-    public let manifest: ThemeManifest; public let tokens: ThemeTokens
-    public init(manifest: ThemeManifest, tokens: ThemeTokens) { self.manifest = manifest; self.tokens = tokens }
+    public let manifest: ThemeManifest; public let tokens: ThemeTokens; public let defaultPalette: Palette
+    public init(manifest: ThemeManifest, tokens: ThemeTokens, defaultPalette: Palette) {
+        self.manifest = manifest; self.tokens = tokens; self.defaultPalette = defaultPalette
+    }
 }
 
 public struct ThemeContext: Sendable {
@@ -163,13 +165,25 @@ public extension ThemeDefinition {
             warning: .system(.warning), negative: .system(.negative), muted: .system(.muted), border: .system(.border), shadow: .system(.shadow)),
         typography: .macos, card: .init(fill: .regularMaterial, shape: .rounded(16), borderWidth: 0.5,
             shadowBlur: 8, shadowY: 3, opacity: 0.96), mediaShape: .rounded(8),
-        metrics: .init(spacingScale: 1, paddingScale: 1)))
+        metrics: .init(spacingScale: 1, paddingScale: 1)),
+        defaultPalette: .init(background: RGB(242, 242, 247), foreground: RGB(28, 28, 30), accents: [
+            RGB(28, 28, 30), RGB(255, 59, 48), RGB(52, 199, 89), RGB(255, 149, 0),
+            RGB(0, 122, 255), RGB(175, 82, 222), RGB(90, 200, 250), RGB(142, 142, 147),
+            RGB(99, 99, 102), RGB(72, 72, 74), RGB(142, 142, 147), RGB(174, 174, 178),
+            RGB(199, 199, 204), RGB(209, 209, 214), RGB(229, 229, 234), RGB(242, 242, 247)
+        ]))
     static let cynaberii = ThemeDefinition(manifest: .init(id: "cynaberii", name: "Cynaberii"), tokens: .init(
         colors: .init(background: .pywalBackground, foreground: .pywalForeground, secondary: .pywal(6), accent: .pywal(4),
             alternateAccent: .pywal(3), positive: .pywal(2), warning: .pywal(3), negative: .pywal(1), muted: .pywal(8),
             border: .pywal(4), shadow: .pywal(3)), typography: .cynaberii,
         card: .init(fill: .color(.pywalBackground), shape: .rectangle, borderWidth: 4, shadowX: 4, shadowY: 4),
-        mediaShape: .rectangle, metrics: .init(spacingScale: 1, paddingScale: 1)))
+        mediaShape: .rectangle, metrics: .init(spacingScale: 1, paddingScale: 1)),
+        defaultPalette: .init(background: RGB(10, 25, 25), foreground: RGB(193, 197, 197), accents: [
+            RGB(24, 48, 48), RGB(190, 76, 76), RGB(111, 166, 122), RGB(222, 177, 82),
+            RGB(91, 151, 201), RGB(183, 119, 184), RGB(100, 181, 181), RGB(220, 224, 217),
+            RGB(82, 108, 108), RGB(212, 96, 96), RGB(139, 190, 143), RGB(237, 199, 112),
+            RGB(124, 177, 220), RGB(205, 145, 207), RGB(134, 207, 207), RGB(236, 239, 231)
+        ]))
 }
 
 private struct ThemeCardModifier: ViewModifier {

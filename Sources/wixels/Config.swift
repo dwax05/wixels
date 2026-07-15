@@ -6,8 +6,8 @@
 // minimal block is just `kind = "..."`. Order in the file is mount order (= z-stack
 // among same-level widgets). Unknown kinds are skipped by the resolver in main.
 //
-// A top-level `[paths]` table sets app-global data files (currently the wal
-// palette). Per-widget files stay in that widget's `[widget.options]`.
+// A top-level `[colors]` table configures the optional wal palette file and
+// individual palette overrides. Per-widget files stay in `[widget.options]`.
 //
 // TOMLKit is confined to this file — the parsed result is plain WixelsKit types
 // (Placement overrides + Options), so plugins never see a TOML dependency.
@@ -31,14 +31,21 @@ struct ConfigEntry {
     let options: Options
 }
 
-/// The whole parsed config: the widget list plus the app-global `[paths]` (raw as
-/// written — `Paths.resolve` tilde-expands them; nil = use the built-in default).
+/// Palette configuration remains sparse until a themed widget resolves it against
+/// its selected theme's defaults.
+struct ColorConfiguration {
+    var file: String?
+    var overrides: PaletteOverrides = .init()
+}
+
+/// The whole parsed config: the widget list plus the app-global `[colors]` table.
+/// File paths are raw — `Paths.resolve` tilde-expands them; nil uses the pywal default.
 /// Per-widget files (quotes, disk-snail volume) live in each widget's
 /// `[widget.options]`, not here.
 struct LoadedConfig {
     var entries: [ConfigEntry] = []
     var theme: String?
-    var colors: String?          // wal palette file (PaletteStore)
+    var colors = ColorConfiguration()
 }
 
 /// Placement fields the config may override; nil = keep the spec's default.
@@ -88,7 +95,7 @@ enum Config {
 
     static func parse(_ text: String) throws -> LoadedConfig {
         let table = try TOMLTable(string: text)
-        let paths = table["paths"]?.table
+        let colors = colorConfiguration(from: table["colors"]?.table)
         let theme = validThemeID(table["theme"]?.table?["default"]?.string)
         let entries: [ConfigEntry] = (table["widget"]?.array).map(Array.init)?.enumerated().compactMap { index, item in
             guard let t = item.table, let kind = t["kind"]?.string else { return nil }
@@ -96,7 +103,27 @@ enum Config {
                                theme: validThemeID(t["theme"]?.string),
                                placement: placement(from: t), options: options(from: t))
         } ?? []
-        return LoadedConfig(entries: entries, theme: theme, colors: paths?["colors"]?.string)
+        return LoadedConfig(entries: entries, theme: theme, colors: colors)
+    }
+
+    private static func colorConfiguration(from table: TOMLTable?) -> ColorConfiguration {
+        guard let table else { return .init() }
+        var result = ColorConfiguration(file: table["file"]?.string)
+        result.overrides.background = color(table["background"], named: "background")
+        result.overrides.foreground = color(table["foreground"], named: "foreground")
+        for index in 0..<16 {
+            result.overrides.accents[index] = color(table["color\(index)"], named: "color\(index)")
+        }
+        return result
+    }
+
+    private static func color(_ value: TOMLValueConvertible?, named name: String) -> RGB? {
+        guard let value else { return nil }
+        guard let string = value.string, let rgb = RGB(hex: string) else {
+            Log.note("invalid [colors].\(name) value — ignoring")
+            return nil
+        }
+        return rgb
     }
 
     private static func validThemeID(_ id: String?) -> String? {

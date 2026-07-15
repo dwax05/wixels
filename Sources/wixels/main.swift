@@ -36,17 +36,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.watcher = ConfigWatcher(path: Config.path) { [weak self] in self?.reload() }
     }
 
-    /// Construct a host from the current config and mount every widget. Reads `[paths]`
+    /// Construct a host from the current config and mount every widget. Reads `[colors]`
     /// afresh so a config edit to colors/nowplaying takes effect on reload. Called at
     /// launch and again on every reload.
     private func buildSession() {
-        // Read the TOML layout. Its `[paths]` feed the shared samplers + palette store;
-        // env vars still override (see Config).
+        // TOML colors override each value from the selected palette file; WIXELS_COLORS
+        // replaces only that file selection (see PaletteStore).
         let cfg = Config.load()
         let menuEntries = makeMenuEntries(config: cfg)
         let services = Services()                                  // shared samplers (cpu, music)
         let host = WidgetHost(
-            palette: PaletteStore(colorsPath: cfg.colors),
+            palette: PaletteStore(colorsPath: cfg.colors.file, overrides: cfg.colors.overrides),
             menuEntries: menuEntries,
             // Suppress the file event our own drag-save write would otherwise raise.
             placementWriter: { [weak self] changes in

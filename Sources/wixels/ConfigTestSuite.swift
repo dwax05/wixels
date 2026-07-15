@@ -47,6 +47,39 @@ func runConfigTestSuite() -> Int32 {
         try expect(placed.anchor == .bottomLeft && placed.offset.width == 4 && placed.size == base.size,
                    "explicit placement fields override widget defaults selectively")
 
+        let colorConfig = try Config.parse("""
+        [colors]
+        file = "/tmp/wal.json"
+        background = "#102021"
+        foreground = "F3E9D2"
+        color0 = "#1A2C2D"
+        color15 = "ABCDEF"
+        unknown = "harmless"
+        """).colors
+        try expect(colorConfig.file == "/tmp/wal.json" &&
+                   colorConfig.overrides.background == RGB(hex: "102021") &&
+                   colorConfig.overrides.foreground == RGB(hex: "F3E9D2") &&
+                   colorConfig.overrides.accents[0] == RGB(hex: "1A2C2D") &&
+                   colorConfig.overrides.accents[15] == RGB(hex: "ABCDEF"),
+                   "direct [colors] values parse with and without #")
+
+        let partialColors = try Config.parse("""
+        [colors]
+        background = "bad"
+        color2 = 3
+        color3 = "001122"
+        """).colors
+        try expect(partialColors.file == nil && partialColors.overrides.background == nil &&
+                   partialColors.overrides.accents[2] == nil &&
+                   partialColors.overrides.accents[3] == RGB(hex: "001122"),
+                   "malformed [colors] values are ignored independently")
+
+        let obsoletePath = try Config.parse("""
+        [paths]
+        colors = "/tmp/obsolete.json"
+        """).colors
+        try expect(obsoletePath.file == nil, "legacy [paths].colors no longer configures palette")
+
         let tempPath = "/tmp/wixels-config-tests-\(ProcessInfo.processInfo.processIdentifier).toml"
         try """
         [theme]

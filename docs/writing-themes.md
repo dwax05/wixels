@@ -34,7 +34,8 @@ public func wixels_register(_ context: UnsafeMutableRawPointer) {
 
     registrar.add(ThemeDefinition(
         manifest: .init(id: "my-theme", name: "My Theme"),
-        tokens: ThemeDefinition.macos.tokens
+        tokens: ThemeDefinition.macos.tokens,
+        defaultPalette: ThemeDefinition.macos.defaultPalette
     ))
 }
 ```
@@ -42,9 +43,11 @@ public func wixels_register(_ context: UnsafeMutableRawPointer) {
 Use a stable lowercase kebab-case ID, such as `my-theme`. The display name is what
 users see conceptually; the ID is what they put in `desktop.toml`.
 
-Start by copying the macOS tokens, then change the values you want. The token set
-covers semantic colors, typography, card fill/shape/border/shadow, media shape, and
-spacing density. A theme should provide every token so every widget remains usable.
+Start by copying the macOS tokens and palette, then change the values you want. The
+token set covers semantic colors, typography, card fill/shape/border/shadow, media
+shape, and spacing density. A theme must provide a complete `defaultPalette` (background,
+foreground, and color0–color15): it is used for any palette component the user's
+`[colors]` TOML and pywal file leave unspecified.
 
 Themes are universal: they do not import widget sample types and cannot change a
 widget's placement or behavior.
