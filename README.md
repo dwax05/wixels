@@ -24,16 +24,35 @@ the script:
 
 ```sh
 ./build-plugins.sh            # build host, bundled widgets, and bundled themes
-./build/debug/wixels          # run (foreground; Ctrl-C to quit)
+./.build/debug/wixels         # run (foreground; Ctrl-C to quit)
 ```
 
-All build output stays under `./build`. Other commands:
+SwiftPM build output stays in `.build` directories. Other commands:
 
 ```sh
 ./build-plugins.sh release    # optimized build
-./build-plugins.sh clean      # remove ./build entirely
+./build-plugins.sh clean      # remove all Wixels SwiftPM .build directories
 pkill -x wixels               # stop a running instance (never `pkill -f`)
 ```
+
+## Package for personal sharing
+
+Create an Apple-silicon app bundle and versioned ZIP from a release build:
+
+```sh
+./package-app.sh 0.1.0
+```
+
+The command builds and tests the host, all 12 bundled widgets, and both bundled themes,
+then writes `dist/Wixels.app` and `dist/Wixels-0.1.0-arm64.zip`. It requires Apple
+silicon and macOS 14 or newer. The app keeps using `~/.config/wixels` for configuration,
+including third-party plugins and themes.
+
+To install it on another Mac, extract the ZIP and move `Wixels.app` to Applications.
+This personal-sharing build is ad-hoc signed, not Developer ID signed or notarized, so
+Gatekeeper may block the first launch. Right-click the app, choose **Open**, then confirm
+that you want to open it. A future public distribution would need Developer ID signing
+and Apple notarization; this command intentionally does neither.
 
 On first run wixels writes a default layout to `~/.config/wixels/desktop.toml` with
 every widget enabled. Widgets sit behind your app windows — bring your desktop forward

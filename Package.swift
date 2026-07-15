@@ -9,7 +9,7 @@ import PackageDescription
 // Widgets are NOT built here. Each is a standalone package under ./plugins/<Name>/
 // producing a libWidget<Name>.dylib. Run ./build-plugins.sh to build the host + every
 // plugin into ./build and install the dylibs next to the wixels executable
-// (build/<config>/), where the host loads them at launch.
+// (.build/<config>/), where the host loads them at launch.
 let package = Package(
     name: "wixels",
     platforms: [.macOS(.v14)],
