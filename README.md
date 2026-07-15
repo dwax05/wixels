@@ -31,6 +31,32 @@ The repository also includes two themes:
 - `cynaberii` uses a pixel-art palette, square panels, and optional live colors from
   [pywal](https://github.com/dylanaraps/pywal).
 
+Themes are inherited, not baked into widgets. Each widget publishes what it wants to
+show, and the resolved theme decides how it looks: a widget-level `theme` wins,
+otherwise the global `[theme] default` applies, otherwise `macos`. The same widgets
+below render pixel-art under `cynaberii` and native under `macos` without any widget
+code or options changing:
+
+| Widget | `cynaberii` | `macos` |
+| --- | --- | --- |
+| `nowplaying` | <img src="docs/images/nowplaying-cynaberii.png" alt="Now-playing widget in the cynaberii theme: pixel-art typography and square panels around album art, a palette strip, and playback controls" width="300"> | <img src="docs/images/nowplaying-macos.png" alt="Now-playing widget in the macos theme: rounded card with system typography around the same album art, palette strip, and playback controls" width="300"> |
+| `clock` | <img src="docs/images/clock-cynaberii.png" alt="Clock widget in the cynaberii theme: blocky pixel digits on a square panel with pixel feet" width="300"> | <img src="docs/images/clock-macos.png" alt="Clock widget in the macos theme: rounded dark panel with blue accent digits" width="300"> |
+
+For example, this config renders every widget with `cynaberii` while the clock alone
+opts back into the native look:
+
+```toml
+[theme]
+default = "cynaberii"
+
+[[widget]]
+kind = "nowplaying"          # inherits cynaberii from [theme]
+
+[[widget]]
+kind = "clock"
+theme = "macos"              # widget-level override wins
+```
+
 ## Requirements
 
 - macOS 14 or newer
