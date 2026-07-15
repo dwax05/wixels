@@ -27,6 +27,7 @@ struct ConfigEntry {
     /// always writes back to the block that produced this entry.
     let sourceIndex: Int
     let kind: String
+    let enabled: Bool
     let theme: String?
     let placement: PlacementOverride
     let options: Options
@@ -94,7 +95,8 @@ enum Config {
         let theme = validThemeID(table["theme"]?.table?["default"]?.string)
         let entries: [ConfigEntry] = (table["widget"]?.array).map(Array.init)?.enumerated().compactMap { index, item in
             guard let t = item.table, let kind = t["kind"]?.string else { return nil }
-            return ConfigEntry(sourceIndex: index, kind: kind, theme: validThemeID(t["theme"]?.string),
+            return ConfigEntry(sourceIndex: index, kind: kind, enabled: enabled(from: t),
+                               theme: validThemeID(t["theme"]?.string),
                                placement: placement(from: t), options: options(from: t))
         } ?? []
         return LoadedConfig(entries: entries, theme: theme,
@@ -108,6 +110,15 @@ enum Config {
             return nil
         }
         return id
+    }
+
+    private static func enabled(from t: TOMLTable) -> Bool {
+        guard let value = t["enabled"] else { return true }
+        guard let bool = value.bool else {
+            Log.note("invalid widget enabled value — defaulting to enabled")
+            return true
+        }
+        return bool
     }
 
     private static func placement(from t: TOMLTable) -> PlacementOverride {
@@ -164,6 +175,37 @@ enum Config {
         let out = table.convert(to: .toml)
         if (try? out.write(toFile: path, atomically: true, encoding: .utf8)) == nil {
             Log.note("failed to write offsets to \(path)")
+        }
+    }
+
+    /// Persist a menu toggle while retaining every other field in the source TOML.
+    /// An absent registered kind gets only a kind field, inheriting global defaults.
+    static func writeWidgetToggle(sourceIndex: Int?, kind: String, enabled: Bool) {
+        guard let text = try? String(contentsOfFile: path, encoding: .utf8),
+              let table = try? TOMLTable(string: text) else {
+            Log.note("failed to read config before toggling '\(kind)'")
+            return
+        }
+        if let sourceIndex,
+           let widgets = table["widget"]?.array,
+           sourceIndex >= 0, sourceIndex < widgets.count,
+           let widget = widgets[sourceIndex]?.table {
+            widget["enabled"] = enabled
+        } else {
+            let widget = TOMLTable()
+            widget["kind"] = kind
+            if !enabled { widget["enabled"] = false }
+            if let widgets = table["widget"]?.array {
+                widgets.append(widget)
+            } else {
+                let widgets = TOMLArray()
+                widgets.append(widget)
+                table["widget"] = widgets
+            }
+        }
+        let out = table.convert(to: .toml)
+        if (try? out.write(toFile: path, atomically: true, encoding: .utf8)) == nil {
+            Log.note("failed to write widget toggle to \(path)")
         }
     }
 

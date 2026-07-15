@@ -77,9 +77,14 @@ struct EditState {
     var ignoresMouse: Bool?
 }
 
-/// A menu-bar-facing summary of one mounted widget: enough to draw a checkmark
-/// row and route a toggle back by index. `label` disambiguates duplicate kinds.
-struct WidgetInfo { let index: Int; let kind: String; let label: String; let enabled: Bool }
+/// A menu-bar-facing summary. Configured entries use their source index as their
+/// identity; discovered entries use their registered kind until they are configured.
+struct WidgetInfo {
+    let sourceIndex: Int?
+    let kind: String
+    let label: String
+    let enabled: Bool
+}
 
 struct LayoutSnapshot: Equatable {
     let configIndex: Int
@@ -88,20 +93,37 @@ struct LayoutSnapshot: Equatable {
     let frame: NSRect
 }
 
+struct InteractionSnapshot: CustomStringConvertible {
+    let configIndex: Int
+    let windowNumber: Int
+    let level: Int
+    let isKey: Bool
+    let ignoresMouseEvents: Bool
+    let editing: Bool
+
+    var description: String {
+        "probe[\(configIndex)] window=\(windowNumber) level=\(level) key=\(isKey) " +
+        "ignoresMouse=\(ignoresMouseEvents) editing=\(editing)"
+    }
+}
+
 @MainActor
 final class WidgetHost {
     let palette: PaletteStore
     private var mounts: [Mount] = []
     private let scheduler = WixelsKit.Scheduler()
     private let placementWriter: ([PlacementChange]) -> Void
+    private var menuEntries: [WidgetInfo]
     /// Freeze the coordinate system for this host lifetime. AppKit can change which
     /// screen is `main` while edit mode activates the accessory app; using that live
     /// value to recover offsets made untouched widgets drift into the config.
     private let layoutFrame: NSRect
 
     init(palette: PaletteStore = PaletteStore(),
+         menuEntries: [WidgetInfo] = [],
          placementWriter: @escaping ([PlacementChange]) -> Void = Config.writePlacements) {
         self.palette = palette
+        self.menuEntries = menuEntries
         self.placementWriter = placementWriter
         self.layoutFrame = NSScreen.main?.visibleFrame ?? .init(x: 0, y: 0, width: 1440, height: 900)
     }
@@ -124,24 +146,23 @@ final class WidgetHost {
         return self
     }
 
-    /// The mounted widgets in menu order, each labelled for display. Duplicate
-    /// kinds get a `#2`, `#3` suffix so the menu can tell two clocks apart.
-    func widgetInfos() -> [WidgetInfo] {
-        var seen: [String: Int] = [:]
-        return mounts.indices.map { i in
-            let kind = mounts[i].kind
-            let n = (seen[kind] ?? 0) + 1
-            seen[kind] = n
-            let label = n == 1 ? kind : "\(kind) #\(n)"
-            return WidgetInfo(index: i, kind: kind, label: label, enabled: mounts[i].enabled)
-        }
-    }
+    func widgetInfos() -> [WidgetInfo] { menuEntries }
 
     func layoutSnapshot() -> [LayoutSnapshot] {
         mounts.compactMap { mount in
             mount.window.map {
                 LayoutSnapshot(configIndex: mount.configIndex, kind: mount.kind,
                                interactive: mount.interactive, frame: $0.frame)
+            }
+        }
+    }
+
+    func interactionSnapshot() -> [InteractionSnapshot] {
+        mounts.compactMap { mount in
+            mount.window.map {
+                InteractionSnapshot(configIndex: mount.configIndex, windowNumber: $0.windowNumber,
+                                    level: $0.level.rawValue, isKey: $0.isKeyWindow,
+                                    ignoresMouseEvents: $0.ignoresMouseEvents, editing: editing)
             }
         }
     }
@@ -440,10 +461,21 @@ final class WidgetHost {
         // .desktopWindow sits BELOW where WindowServer routes clicks (Finder eats
         // them), so an interactive widget there never sees a mouse event. Desktop
         // icons live one level up and ARE clickable — put interactive panels there.
-        let levelKey: CGWindowLevelKey = m.interactive ? .desktopIconWindow : .desktopWindow
-        // zBoost keeps a widget above its peers even after a click reorders windows
-        // within a level (e.g. the clock staying above the frog it hides).
-        w.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(levelKey)) + m.zBoost)
+        // A passive widget may still need to stack with/above an interactive peer
+        // (the click-through clock visually covers the frog). A positive zBoost is
+        // an explicit request for that stack; it must not imply mouse handling.
+        //
+        // Finder's desktop-icons window is a full-screen, alpha-1 window at exactly
+        // kCGDesktopIconWindowLevel. Activating Finder (any desktop click) orders it
+        // front within that level — above every widget panel — and it then wins hit
+        // testing everywhere, killing every interactive widget until the windows are
+        // recreated. WindowServer only reorders within a level, so base elevated
+        // widgets one sub-level higher; Finder can never climb above them. zBoost
+        // still stacks peers relative to each other on top of that base.
+        let baseLevel = (m.interactive || m.zBoost > 0)
+            ? Int(CGWindowLevelForKey(.desktopIconWindow)) + 1
+            : Int(CGWindowLevelForKey(.desktopWindow))
+        w.level = NSWindow.Level(rawValue: baseLevel + m.zBoost)
         w.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
         w.setFrameOrigin(origin(for: m))
         w.orderFront(nil)

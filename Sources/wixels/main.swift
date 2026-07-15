@@ -29,7 +29,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         PluginLoader.load(into: registrar)
 
         buildSession()
-        self.statusBar = StatusBarController(host: host)
+        self.statusBar = StatusBarController(host: host) { [weak self] info in
+            self?.toggle(info)
+        }
         // Watch the layout file and rebuild live when it changes (WIXELS_CONFIG honoured).
         self.watcher = ConfigWatcher(path: Config.path) { [weak self] in self?.reload() }
     }
@@ -41,9 +43,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Read the TOML layout. Its `[paths]` feed the shared samplers + palette store;
         // env vars still override (see Config).
         let cfg = Config.load()
+        let menuEntries = makeMenuEntries(config: cfg)
         let services = Services(nowplayingPath: cfg.nowplaying)   // shared samplers (cpu, music)
         let host = WidgetHost(
             palette: PaletteStore(colorsPath: cfg.colors),
+            menuEntries: menuEntries,
             // Suppress the file event our own drag-save write would otherwise raise.
             placementWriter: { [weak self] changes in
                 self?.watcher?.ignoringWrites { Config.writePlacements(changes) }
@@ -53,6 +57,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Mount each entry in file order (order sets z-stacking among same-level
         // widgets — frog before clock).
         for entry in cfg.entries {
+            guard entry.enabled else { continue }
             if let spec = registrar.specs[entry.kind] {
                 let placement = entry.placement.apply(to: spec.defaultPlacement)
                 host.mount(spec.build(services, entry.options), placement: placement,
@@ -70,6 +75,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         host.run()
         self.host = host
+    }
+
+    /// Configured rows retain file order. Unknown config entries remain in the
+    /// config file, but are omitted until their plugin is loaded again.
+    private func makeMenuEntries(config: LoadedConfig) -> [WidgetInfo] {
+        let registered = Set(registrar.specs.keys).union(registrar.themedSpecs.keys)
+        var seen: [String: Int] = [:]
+        var result: [WidgetInfo] = []
+        for entry in config.entries where registered.contains(entry.kind) {
+            let n = (seen[entry.kind] ?? 0) + 1
+            seen[entry.kind] = n
+            result.append(WidgetInfo(sourceIndex: entry.sourceIndex, kind: entry.kind,
+                                     label: n == 1 ? entry.kind : "\(entry.kind) #\(n)",
+                                     enabled: entry.enabled))
+        }
+        return result
+    }
+
+    private func toggle(_ info: WidgetInfo) {
+        guard let host else { return }
+        let on = !info.enabled
+        watcher?.ignoringWrites {
+            Config.writeWidgetToggle(sourceIndex: info.sourceIndex, kind: info.kind, enabled: on)
+        }
+        host.shutdown()
+        buildSession()
+        statusBar?.rebind(host: self.host)
     }
 
     /// Config file changed on disk: tear the running host down and rebuild it. Skipped
@@ -92,8 +124,12 @@ if CommandLine.arguments.contains("--config-tests") {
     exit(runConfigTestSuite())
 } else if CommandLine.arguments.contains("--layout-tests") {
     exit(runLayoutTestSuite())
+} else if CommandLine.arguments.contains("--interaction-tests") {
+    exit(runInteractionTestSuite())
 } else if CommandLine.arguments.contains("--plugin-tests") {
     exit(PluginLoader.runTestSuite())
+} else if CommandLine.arguments.contains("--plugin-path-tests") {
+    exit(runPluginLoaderPathTestSuite())
 } else {
     let app = NSApplication.shared
     app.setActivationPolicy(.accessory)      // no dock icon, single process

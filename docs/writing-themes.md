@@ -49,10 +49,10 @@ widget's placement or behavior.
 
 ## Build and install
 
-Build the repository, including bundled themes:
+Build the standalone widget/theme packages, including bundled themes:
 
 ```sh
-./build-plugins.sh
+./build-plugins.sh debug
 ```
 
 Or build only your package:
@@ -61,7 +61,8 @@ Or build only your package:
 swift build --package-path themes/MyTheme
 ```
 
-Copy `libThemeMyTheme.dylib` to `~/.config/wixels/themes/`, then select it in
+The repository build stages the result under `build/debug/themes`. For a user
+install, copy `libThemeMyTheme.dylib` to `~/.config/wixels/themes/`, then select it in
 `~/.config/wixels/desktop.toml`:
 
 ```toml
@@ -79,6 +80,12 @@ theme = "my-theme"
 
 Restart Wixels after installing a new theme library. Changing the configuration
 reloads the selected theme for already-installed libraries.
+
+Packaged themes belong in `Wixels.app/Contents/Resources/themes`. Wixels does not
+scan the executable or SwiftPM build directories; `WIXELS_PLUGIN_ROOT` is only for
+explicit source-checkout staging runs. The release packager includes only its
+explicit shipped-theme list; set `WIXELS_BUNDLED_THEMES=...` to intentionally add a
+custom theme.
 
 ## Compatibility and safety
 

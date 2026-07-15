@@ -4,8 +4,14 @@ import WixelsKit
 func runConfigTestSuite() -> Int32 {
     do {
         let legacy = try Config.parse("[[widget]]\nkind = \"clock\"")
-        try expect(legacy.theme == nil && legacy.entries[0].theme == nil,
-                   "missing theme selects macos at resolution")
+        try expect(legacy.theme == nil && legacy.entries[0].theme == nil && legacy.entries[0].enabled,
+                   "missing theme and enabled select defaults")
+
+        let disabled = try Config.parse("[[widget]]\nkind = \"clock\"\nenabled = false")
+        try expect(!disabled.entries[0].enabled, "explicit enabled=false parses")
+
+        let malformedEnabled = try Config.parse("[[widget]]\nkind = \"clock\"\nenabled = \"no\"")
+        try expect(malformedEnabled.entries[0].enabled, "malformed enabled defaults to true")
 
         let selected = try Config.parse("""
         [theme]
@@ -40,6 +46,34 @@ func runConfigTestSuite() -> Int32 {
         let placed = explicit.placement.apply(to: base)
         try expect(placed.anchor == .bottomLeft && placed.offset.width == 4 && placed.size == base.size,
                    "explicit placement fields override widget defaults selectively")
+
+        let tempPath = "/tmp/wixels-config-tests-\(ProcessInfo.processInfo.processIdentifier).toml"
+        try """
+        [theme]
+        default = "cynaberii"
+        [[widget]]
+        kind = "clock"
+        theme = "macos"
+        anchor = "bottomLeft"
+        offset = [4, 5]
+        mystery = "keep me"
+          [widget.options]
+          answer = 42
+        """.write(toFile: tempPath, atomically: true, encoding: .utf8)
+        setenv("WIXELS_CONFIG", tempPath, 1)
+        defer { unsetenv("WIXELS_CONFIG"); try? FileManager.default.removeItem(atPath: tempPath) }
+        Config.writeWidgetToggle(sourceIndex: 0, kind: "clock", enabled: false)
+        let preserved = try String(contentsOfFile: tempPath, encoding: .utf8)
+        let preservedConfig = Config.load()
+        try expect(preserved.contains("enabled = false") && preserved.contains("mystery = 'keep me'") &&
+                   preservedConfig.entries[0].placement.offset == CGSize(width: 4, height: 5) &&
+                   preservedConfig.entries[0].options.int("answer") == 42,
+                   "disabling preserves placement, options, and unknown fields")
+
+        Config.writeWidgetToggle(sourceIndex: nil, kind: "owl", enabled: true)
+        let appended = try String(contentsOfFile: tempPath, encoding: .utf8)
+        try expect(appended.contains("kind = 'owl'") && !appended.contains("enabled = true"),
+                   "enabling an absent widget writes a minimal entry")
         print("PASS config suite")
         return 0
     } catch {
