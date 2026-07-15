@@ -88,17 +88,14 @@ private struct OwlView: View {
 
     // a "z" rising and fading, like the JS owl-z animation
     private func zLetter(_ z: ZSpec) -> some View {
-        TimelineView(.periodic(from: .now, by: 1.0 / 8.0)) { ctx in
-            let t = ctx.date.timeIntervalSinceReferenceDate
-            let phase = (((t - z.delay) / z.dur).truncatingRemainder(dividingBy: 1) + 1)
-                .truncatingRemainder(dividingBy: 1)
-            let opacity = phase < 0.2 ? phase / 0.2 * 0.9 : max(0, 0.9 * (1 - (phase - 0.2) / 0.8))
-            Text("z")
-                .font(theme.font(.caption))
-                .foregroundColor(theme.color(.foreground))
-                .offset(x: -z.x, y: -4 - CGFloat(phase) * 20)
-                .opacity(opacity)
-        }
+        Text("z")
+            .font(theme.font(.caption))
+            .foregroundColor(theme.color(.foreground))
+            .offset(x: -z.x, y: -4)
+            .loopEffect([
+                .sampled(.offsetY, duration: z.dur, fps: 30, delay: z.delay) { -20 * $0 },
+                .sampled(.opacity, duration: z.dur, fps: 30, delay: z.delay) { $0 < 0.2 ? $0 / 0.2 * 0.9 : max(0, 0.9 * (1 - ($0 - 0.2) / 0.8)) },
+            ])
     }
 
     private func blink() { triggerTransient($blinking, for: Owl.blinkSeconds) }

@@ -110,18 +110,16 @@ private struct WaterDrops: View {
 
     var body: some View {
         let cx = width / 2                       // plant is centred in the grid
-        TimelineView(.periodic(from: .now, by: 1.0 / 8.0)) { ctx in
-            let t = ctx.date.timeIntervalSinceReferenceDate
-            ForEach(0..<3, id: \.self) { i in
-                let dx: CGFloat = [-6, 0, 6][i]
-                let phase = (((t - Double(i) * 0.05) / 0.55).truncatingRemainder(dividingBy: 1) + 1)
-                    .truncatingRemainder(dividingBy: 1)
-                let fall = CGFloat(phase) * (height * 0.5)
-                Rectangle().fill(color)
-                    .frame(width: max(1, Plant.px / 2), height: Plant.px)
-                    .offset(x: cx + dx * CGFloat(phase), y: fall)
-                    .opacity(phase < 0.85 ? 1 : max(0, 1 - (phase - 0.85) / 0.15))
-            }
+        ForEach(0..<3, id: \.self) { i in
+            let dx: CGFloat = [-6, 0, 6][i]
+            Rectangle().fill(color)
+                .frame(width: max(1, Plant.px / 2), height: Plant.px)
+                .offset(x: cx, y: 0)
+                .loopEffect([
+                    .sampled(.offsetX, duration: 0.55, fps: 30, delay: Double(i) * 0.05) { dx * $0 },
+                    .sampled(.offsetY, duration: 0.55, fps: 30, delay: Double(i) * 0.05) { height * 0.5 * $0 },
+                    .sampled(.opacity, duration: 0.55, fps: 30, delay: Double(i) * 0.05) { $0 < 0.85 ? 1 : max(0, 1 - ($0 - 0.85) / 0.15) },
+                ])
         }
         .frame(width: width, height: height, alignment: .topLeading)
     }

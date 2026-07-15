@@ -219,24 +219,18 @@ private struct Precip: View {
     var body: some View {
         let n = 4
         let dur = snow ? 1.6 : 0.8
-        TimelineView(.periodic(from: .now, by: 1.0 / 10.0)) { ctx in
-            let t = ctx.date.timeIntervalSinceReferenceDate
-            ForEach(0..<n, id: \.self) { i in
-                let left = 8 + CGFloat(i) * (10 * px) / CGFloat(n)
-                let delay = Double(i) / Double(n) * dur
-                let phase = (((t - delay) / dur).truncatingRemainder(dividingBy: 1) + 1)
-                    .truncatingRemainder(dividingBy: 1)
-                let fall = CGFloat(phase) * (5 * px)
-                Group {
-                    if snow {
-                        Circle().fill(color).frame(width: px, height: px)
-                    } else {
-                        Rectangle().fill(color).frame(width: max(1, px / 2), height: px * 1.5)
-                    }
-                }
-                .offset(x: left, y: 5 * px + fall)
-                .opacity(phase < 0.9 ? 1 : max(0, 1 - (phase - 0.9) / 0.1))
+        ForEach(0..<n, id: \.self) { i in
+            let left = 8 + CGFloat(i) * (10 * px) / CGFloat(n)
+            let delay = Double(i) / Double(n) * dur
+            Group {
+                if snow { Circle().fill(color).frame(width: px, height: px) }
+                else { Rectangle().fill(color).frame(width: max(1, px / 2), height: px * 1.5) }
             }
+            .offset(x: left, y: 5 * px)
+            .loopEffect([
+                .sampled(.offsetY, duration: dur, fps: 30, delay: delay) { 5 * px * $0 },
+                .sampled(.opacity, duration: dur, fps: 30, delay: delay) { $0 < 0.9 ? 1 : max(0, 1 - ($0 - 0.9) / 0.1) },
+            ])
         }
     }
 }
@@ -245,10 +239,11 @@ private struct Precip: View {
 private struct Flash<Content: View>: View {
     @ViewBuilder let content: () -> Content
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 1.0 / 10.0)) { ctx in
-            let t = ctx.date.timeIntervalSinceReferenceDate
-            let phase = (t / 2.5).truncatingRemainder(dividingBy: 1)
-            content().opacity((0.92...0.98).contains(phase) ? 1 : 0.15)
-        }
+        content().loopEffect([.sampled(.opacity, duration: 2.5, fps: 30) { phase in
+            if phase < 0.90 { return 0.15 }
+            if phase < 0.92 { return 0.15 + (phase - 0.90) / 0.02 * 0.85 }
+            if phase < 0.98 { return 1 }
+            return 1 - (phase - 0.98) / 0.02 * 0.85
+        }])
     }
 }

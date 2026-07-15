@@ -229,31 +229,13 @@ struct Wiggle: ViewModifier {
 
     func body(content: Content) -> some View {
         if happy {
-            // pet-happy: a quick bounce while being petted
-            TimelineView(.animation) { ctx in
-                let t = ctx.date.timeIntervalSinceReferenceDate
-                let ph = (t / 0.45).truncatingRemainder(dividingBy: 1)
-                content.offset(y: -3 * sin(ph * .pi)).scaleEffect(y: 1 - 0.07 * ph)
-            }
+            content.loopEffect([.sampled(.offsetY, duration: 0.45, fps: 30) { -3 * sin($0 * .pi) }, .sampled(.scaleY, duration: 0.45, fps: 30) { 1 - 0.07 * $0 }])
         } else if mood == .run {
-            TimelineView(.animation) { ctx in
-                let t = ctx.date.timeIntervalSinceReferenceDate
-                content.offset(x: (Int(t / 0.14) % 2 == 0) ? -1 : 1)          // jitter
-            }
+            content.loopEffect([.init(.offsetX, values: [-1, 1], duration: 0.28, discrete: true)])
         } else if mood == .sleep {
-            TimelineView(.animation) { ctx in
-                let t = ctx.date.timeIntervalSinceReferenceDate
-                content.offset(y: sin(t / 2.8 * 2 * .pi) * 2)                 // slow bob
-            }
+            content.loopEffect([.sampled(.offsetY, duration: 2.8, fps: 30) { sin($0 * 2 * .pi) * 2 }])
         } else if music {
-            // pet-groove: 0.6s bob + rotate. 0/100% → y0 rot-2°, 50% → y-2 rot+2°.
-            TimelineView(.animation) { ctx in
-                let t = ctx.date.timeIntervalSinceReferenceDate
-                let c = cos(t / 0.6 * 2 * .pi)
-                content
-                    .rotationEffect(.degrees(-2 * c), anchor: .bottom)
-                    .offset(y: -(1 - c))
-            }
+            content.loopEffect([.sampled(.rotationDegrees, duration: 0.6, fps: 30) { -2 * cos($0 * 2 * .pi) }, .sampled(.offsetY, duration: 0.6, fps: 30) { -(1 - cos($0 * 2 * .pi)) }], anchor: .bottom)
         } else {
             content
         }

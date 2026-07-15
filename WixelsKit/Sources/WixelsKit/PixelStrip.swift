@@ -83,14 +83,19 @@ public struct PixelStrip: View {
     }
 
     public var body: some View {
-        if frames.count > 1 && frameMS > 0 {
-            TimelineView(.periodic(from: .now, by: frameMS / 1000)) { ctx in
-                let t = ctx.date.timeIntervalSinceReferenceDate
-                let i = Int((t * 1000 / frameMS).rounded(.down)) % frames.count
-                PixelFrame(grid: frames[i], px: px, palette: palette)
+        if ProcessInfo.processInfo.environment["WIXELS_NO_CA"] == "1" {
+            // A/B escape hatch: retain the previous Canvas renderer when CA
+            // behavior needs to be compared on a particular macOS release.
+            if frames.count > 1 && frameMS > 0 {
+                TimelineView(.periodic(from: .now, by: frameMS / 1000)) { ctx in
+                    let i = Int((ctx.date.timeIntervalSinceReferenceDate * 1000 / frameMS).rounded(.down)) % frames.count
+                    PixelFrame(grid: frames[i], px: px, palette: palette)
+                }
+            } else {
+                PixelFrame(grid: frames.first ?? [], px: px, palette: palette)
             }
         } else {
-            PixelFrame(grid: frames.first ?? [], px: px, palette: palette)   // empty → draws nothing, never crashes
+            AnimatedSprite(frames: frames, px: px, palette: palette, frameMS: frameMS)
         }
     }
 }
@@ -197,21 +202,16 @@ public struct RisingParticle: View {
     }
 
     public var body: some View {
-        // Pixel particles remain smooth at 12 fps while avoiding display-rate
-        // compositing for a decorative desktop effect.
-        TimelineView(.periodic(from: .now, by: 1.0 / frameRate)) { ctx in
-            let t = ctx.date.timeIntervalSinceReferenceDate
-            let phase = (((t - delay) / dur).truncatingRemainder(dividingBy: 1) + 1)
-                .truncatingRemainder(dividingBy: 1)
-            let opacity = phase < fadeIn ? phase / fadeIn
-                                         : max(0, 1 - (phase - fadeIn) / (1 - fadeIn))
-            let scale = (1 - scaleGrow) + phase * scaleGrow
-            PixelStrip(frames: [sprite], px: size, palette: palette)
-                .scaleEffect(scale)
-                .rotationEffect(.degrees(rot))
-                .offset(x: x, y: baseY - phase * rise)
-                .opacity(opacity)
-        }
+        let tracks = [
+            LoopTrack.sampled(.offsetY, duration: dur, fps: frameRate, delay: delay) { -$0 * rise },
+            LoopTrack.sampled(.opacity, duration: dur, fps: frameRate, delay: delay) { phase in
+                phase < fadeIn ? phase / fadeIn : max(0, 1 - (phase - fadeIn) / (1 - fadeIn))
+            },
+            LoopTrack.sampled(.scale, duration: dur, fps: frameRate, delay: delay) { (1 - scaleGrow) + $0 * scaleGrow },
+        ]
+        AnimatedSprite(frames: [sprite], px: size, palette: palette, motion: tracks)
+            .rotationEffect(.degrees(rot))
+            .offset(x: x, y: baseY)
     }
 }
 
