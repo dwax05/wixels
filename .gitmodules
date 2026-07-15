@@ -1,0 +1,3 @@
+[submodule "Vendor/MediaRemoteAdapter"]
+	path = Vendor/MediaRemoteAdapter
+	url = https://github.com/ungive/mediaremote-adapter.git

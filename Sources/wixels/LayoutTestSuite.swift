@@ -7,7 +7,7 @@ import WixelsKit
 @MainActor
 func runLayoutTestSuite() -> Int32 {
     let config = Config.load()
-    let services = Services(nowplayingPath: config.nowplaying)
+    let services = Services()
     let registrar = Registrar()
     PluginLoader.load(into: registrar)
     let host = WidgetHost(palette: PaletteStore(colorsPath: config.colors),

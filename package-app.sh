@@ -20,6 +20,8 @@ MACOS="$APP/Contents/MacOS"
 RESOURCES="$APP/Contents/Resources"
 PLUGINS="$RESOURCES/plugins"
 THEMES="$RESOURCES/themes"
+ADAPTER_FRAMEWORK="$RESOURCES/MediaRemoteAdapter.framework"
+ADAPTER_SCRIPT="$RESOURCES/mediaremote-adapter.pl"
 PLIST="$APP/Contents/Info.plist"
 RELEASE="$ROOT/.build/release"
 BUNDLED_SUITE="${WIXELS_BUNDLED_WIDGET_SUITE-}"
@@ -71,6 +73,13 @@ plutil -lint "$PLIST"
 cp "$RELEASE/wixels" "$RELEASE/libWixelsKit.dylib" "$MACOS/"
 [ "$expected_plugins" -eq 0 ] || cp "${widget_dylibs[@]}" "$PLUGINS/"
 [ "$expected_themes" -eq 0 ] || cp "${theme_dylibs[@]}" "$THEMES/"
+cp -R "$ROOT/build/release/MediaRemoteAdapter.framework" "$ADAPTER_FRAMEWORK"
+cp "$ROOT/build/release/mediaremote-adapter.pl" "$ADAPTER_SCRIPT"
+cp "$ROOT/Vendor/MediaRemoteAdapter/LICENSE" "$RESOURCES/MediaRemoteAdapter-LICENSE"
+# The adapter's CMake project builds universal binaries; personal Wixels
+# packages are Apple-silicon-only, matching the host and extension payload.
+lipo -thin arm64 "$ADAPTER_FRAMEWORK/MediaRemoteAdapter" -output "$ADAPTER_FRAMEWORK/MediaRemoteAdapter.arm64"
+mv "$ADAPTER_FRAMEWORK/MediaRemoteAdapter.arm64" "$ADAPTER_FRAMEWORK/MediaRemoteAdapter"
 
 if [ "$(find "$PLUGINS" -maxdepth 1 -name 'libWidget*.dylib' | wc -l | tr -d ' ')" -ne "$expected_plugins" ] ||
    [ "$(find "$THEMES" -maxdepth 1 -name 'libTheme*.dylib' | wc -l | tr -d ' ')" -ne "$expected_themes" ]; then
@@ -79,7 +88,7 @@ if [ "$(find "$PLUGINS" -maxdepth 1 -name 'libWidget*.dylib' | wc -l | tr -d ' '
 fi
 
 echo "==> validating Apple-silicon payload"
-for binary in "$MACOS/wixels" "$MACOS"/*.dylib "$PLUGINS"/*.dylib "$THEMES"/*.dylib; do
+for binary in "$MACOS/wixels" "$MACOS"/*.dylib "$PLUGINS"/*.dylib "$THEMES"/*.dylib "$ADAPTER_FRAMEWORK/MediaRemoteAdapter"; do
     if [ "$(lipo -archs "$binary")" != "arm64" ]; then
         echo "error: $(basename "$binary") is not arm64-only" >&2
         exit 1
@@ -93,6 +102,7 @@ for binary in "$MACOS/wixels" "$MACOS"/*.dylib "$PLUGINS"/*.dylib "$THEMES"/*.dy
         case "$dependency" in
             /System/*|/usr/lib/*) ;;
             @rpath/*|@loader_path/*)
+                [ "$dependency" = "@rpath/MediaRemoteAdapter.framework/Versions/A/MediaRemoteAdapter" ] && continue
                 dependency_name="$(basename "$dependency")"
                 if [ ! -e "$MACOS/$dependency_name" ] && [ ! -e "$PLUGINS/$dependency_name" ] && [ ! -e "$THEMES/$dependency_name" ]; then
                     echo "error: $(basename "$binary") depends on missing $dependency" >&2
@@ -117,7 +127,8 @@ codesign --verify --deep --strict --verbose=2 "$APP"
 
 if [ "$expected_plugins" -gt 0 ]; then
     echo "==> testing packaged plugins"
-    "$MACOS/wixels" --plugin-tests
+    mkdir -p "$STAGING/plugin-test-home"
+    HOME="$STAGING/plugin-test-home" "$MACOS/wixels" --plugin-tests
 else
     echo "==> no bundled extensions selected; skipping plugin runtime test"
 fi
@@ -131,7 +142,7 @@ mkdir -p "$EXTRACTED"
 ditto -x -k "$ZIP" "$EXTRACTED"
 codesign --verify --deep --strict --verbose=2 "$EXTRACTED/Wixels.app"
 if [ "$expected_plugins" -gt 0 ]; then
-    "$EXTRACTED/Wixels.app/Contents/MacOS/wixels" --plugin-tests
+    HOME="$STAGING/plugin-test-home" "$EXTRACTED/Wixels.app/Contents/MacOS/wixels" --plugin-tests
 fi
 
 mkdir -p "$ROOT/dist"
@@ -139,6 +150,11 @@ rm -rf "$ROOT/dist/Wixels.app"
 rm -f "$ROOT/dist/Wixels-$VERSION-arm64.zip"
 mv "$APP" "$ROOT/dist/Wixels.app"
 mv "$ZIP" "$ROOT/dist/Wixels-$VERSION-arm64.zip"
+
+if [ "$(find "$ROOT/dist/Wixels.app/Contents/Resources/plugins" -maxdepth 1 -name 'libWidget*.dylib' | wc -l | tr -d ' ')" -ne "$expected_plugins" ]; then
+    echo "error: packaged app lost its widget payload" >&2
+    exit 1
+fi
 
 echo "==> packaged dist/Wixels.app"
 echo "==> packaged dist/Wixels-$VERSION-arm64.zip"

@@ -1,23 +1,16 @@
-// MusicMonitor — is a song playing right now?
+// MusicMonitor — shared system-wide now-playing reader.
 //
-// NOTE: macOS 15.4+ gates the private MediaRemote now-playing API — an
-// untrusted (ad-hoc-signed) binary like ours gets nil back from
-// MRMediaRemoteGetNowPlayingInfo, even though the Apple-signed `swift`
-// interpreter and `nowplaying-cli`'s bundled MediaRemoteMini shim get real data.
-// Reimplementing that shim in-process isn't worth it.
-//
-// Instead we read a shared cache an external publisher writes: a sketchybar plugin
-// runs ONE nowplaying-cli stream and publishes ~/.cache/wixels/nowplaying.json
-// (event-driven + 3s poll; override the path with WIXELS_NOWPLAYING). We read
-// `playbackRate` from it — no per-tick spawn, and consistent with the bar and
-// the other widgets. If the cache is missing/stale, fall back to a direct
-// `nowplaying-cli get playbackRate` (which works where in-process MediaRemote
-// does not).
+// MediaRemote is a private macOS framework. Starting with macOS 15.4, its
+// daemon accepts metadata reads only from entitled clients, so Wixels invokes
+// its bundled BSD-licensed MediaRemoteAdapter through Apple's entitled
+// /usr/bin/perl. This removes the old cache-file and Homebrew CLI dependency
+// while retaining system-wide support for Music, Spotify, browsers, and other
+// MediaRemote publishers.
 
 import Foundation
 
 /// The full current-track snapshot the now-playing widget draws. `art` is raw
-/// base64 (the shared cache stores it un-prefixed), "" when there's no artwork.
+/// base64, or "" when the publisher has not supplied artwork yet.
 public struct NowPlayingInfo: Equatable, Sendable {
     public var hasTrack: Bool
     public var title: String
@@ -34,8 +27,8 @@ public struct NowPlayingInfo: Equatable, Sendable {
 }
 
 public struct NowPlayingActions: Sendable {
-    public let togglePlayPause: @Sendable () -> Void
-    public init(togglePlayPause: @escaping @Sendable () -> Void) {
+    public let togglePlayPause: @Sendable () async -> Void
+    public init(togglePlayPause: @escaping @Sendable () async -> Void) {
         self.togglePlayPause = togglePlayPause
     }
 }
@@ -79,121 +72,129 @@ public struct PlayOverride {
     }
 }
 
-public final class MusicMonitor: @unchecked Sendable {
-    // Cache file the external publisher writes. Precedence: WIXELS_NOWPLAYING env >
-    // the config's `[paths]` nowplaying (passed via Services) > the default.
-    private let cache: String
-    private let staleSeconds: TimeInterval = 30
-    private let npCLI = "/opt/homebrew/bin/nowplaying-cli"
+public actor MusicMonitor {
+    private struct Snapshot {
+        let title: String
+        let artist: String
+        let album: String
+        let duration: String
+        let playing: Bool
+        let art: String
 
-    public init(cachePath: String? = nil) {
-        cache = Paths.resolve(env: "WIXELS_NOWPLAYING", config: cachePath,
-                              default: "~/.cache/wixels/nowplaying.json")
+        static let idle = Snapshot(title: "", artist: "", album: "", duration: "", playing: false, art: "")
     }
 
-    /// True when something is actively playing (playbackRate > 0).
-    public func isPlayingNow() async -> Bool {
-        if let d = cacheDict() { return rate(d["playbackRate"]) > 0 }
-        return (Double(runNP(["get", "playbackRate"]).first ?? "") ?? 0) > 0
+    private let adapterScript: URL?
+    private let adapterFramework: URL?
+    private var cached: (snapshot: Snapshot, sampledAt: Date)?
+    private var didLogFailure = false
+
+    /// `resourceRoot` is injected by tests; production finds either the source
+    /// staging directory (`WIXELS_PLUGIN_ROOT`) or the app bundle's Resources.
+    public init(resourceRoot: URL? = nil) {
+        let root = resourceRoot
+            ?? ProcessInfo.processInfo.environment["WIXELS_PLUGIN_ROOT"].map(URL.init(fileURLWithPath:))
+            ?? Bundle.main.resourceURL
+        adapterScript = root?.appendingPathComponent("mediaremote-adapter.pl")
+        adapterFramework = root?.appendingPathComponent("MediaRemoteAdapter.framework")
     }
 
-    /// Full track snapshot for the now-playing widget: shared cache first (has art
-    /// + all fields), falling back to a direct `nowplaying-cli get` trio (no art)
-    /// when the bar isn't publishing.
-    public func nowPlaying() async -> NowPlayingInfo {
-        if let d = cacheDict() {
-            let title = string(d["title"])
-            return NowPlayingInfo(
-                hasTrack: !title.isEmpty, title: title, artist: string(d["artist"]),
-                playing: rate(d["playbackRate"]) > 0, art: (d["art"] as? String) ?? "")
+    /// True when something is actively playing.
+    public func isPlayingNow() -> Bool { snapshot().playing }
+
+    public func nowPlaying() -> NowPlayingInfo {
+        let value = snapshot()
+        return NowPlayingInfo(hasTrack: !value.title.isEmpty, title: value.title, artist: value.artist,
+                              playing: value.playing, art: value.art)
+    }
+
+    public func poster() -> PosterInfo {
+        let value = snapshot()
+        return PosterInfo(hasTrack: !value.title.isEmpty, title: value.title, artist: value.artist,
+                          album: value.album, duration: Self.fmtTime(value.duration),
+                          playing: value.playing, art: value.art)
+    }
+
+    public func togglePlayPause() { send(command: 2) }
+    public func next() { send(command: 4) }
+    public func toggleShuffle() { send(command: 6) }
+
+    private func snapshot() -> Snapshot {
+        if let cached, Date().timeIntervalSince(cached.sampledAt) < 1 {
+            return cached.snapshot
         }
-        let out = runNP(["get", "title", "artist", "playbackRate"])
-        let title = out.indices.contains(0) ? clean(out[0]) : ""
-        let artist = out.indices.contains(1) ? clean(out[1]) : ""
-        let playing = (out.indices.contains(2) ? Double(out[2]) ?? 0 : 0) > 0
-        return NowPlayingInfo(hasTrack: !title.isEmpty, title: title, artist: artist,
-                              playing: playing, art: "")
-    }
-
-    /// Full poster snapshot: cache first (has album/duration/art), CLI fallback.
-    public func poster() async -> PosterInfo {
-        if let d = cacheDict() {
-            let title = string(d["title"])
-            return PosterInfo(
-                hasTrack: !title.isEmpty, title: title, artist: string(d["artist"]),
-                album: string(d["album"]), duration: Self.fmtTime(string(d["duration"])),
-                playing: rate(d["playbackRate"]) > 0, art: (d["art"] as? String) ?? "")
+        guard let data = run(["get"]),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else {
+            cached = (.idle, Date())
+            return .idle
         }
-        let out = runNP(["get", "title", "artist", "album", "duration", "playbackRate"])
-        func at(_ i: Int) -> String { out.indices.contains(i) ? clean(out[i]) : "" }
-        let title = at(0)
-        return PosterInfo(hasTrack: !title.isEmpty, title: title, artist: at(1), album: at(2),
-                          duration: Self.fmtTime(at(3)), playing: (Double(at(4)) ?? 0) > 0, art: "")
+        func text(_ key: String) -> String {
+            let value = (object[key] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            return value == "null" ? "" : value
+        }
+        func number(_ key: String) -> Double {
+            if let value = object[key] as? Double { return value }
+            if let value = object[key] as? Int { return Double(value) }
+            if let value = object[key] as? String { return Double(value) ?? 0 }
+            return 0
+        }
+        let reportedPlaying = object["playing"] as? Bool
+        let playing = (reportedPlaying ?? (number("playing") > 0)) || number("playbackRate") > 0
+        let value = Snapshot(title: text("title"), artist: text("artist"), album: text("album"),
+                             duration: text("duration"), playing: playing, art: text("artworkData"))
+        cached = (value, Date())
+        return value
     }
 
-    /// Toggle play/pause (click action). MediaRemote's writes still work for an
-    /// untrusted binary even though its now-playing *reads* are gated (see header).
-    public func togglePlayPause() { _ = runNP(["togglePlayPause"]) }
-
-    /// Skip to the next track.
-    public func next() { _ = runNP(["next"]) }
-
-    /// Toggle Spotify shuffle over AppleScript (harmless no-op if Spotify isn't the player).
-    public func toggleShuffle() {
-        let p = Process()
-        p.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-        p.arguments = ["-e", "tell application \"Spotify\" to set shuffling to not shuffling"]
-        p.standardError = FileHandle.nullDevice
-        try? p.run()
+    private func send(command: Int) {
+        guard let script = adapterScript, let framework = adapterFramework,
+              FileManager.default.isExecutableFile(atPath: "/usr/bin/perl"),
+              FileManager.default.fileExists(atPath: script.path),
+              FileManager.default.fileExists(atPath: framework.path)
+        else { logFailure("embedded MediaRemoteAdapter resources are missing") ; return }
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/perl")
+        process.arguments = [script.path, framework.path, "send", String(command)]
+        process.standardError = FileHandle.nullDevice
+        try? process.run()
     }
 
-    /// Seconds string → "m:ss" (or "" when zero/unparseable).
+    private func run(_ arguments: [String]) -> Data? {
+        guard let script = adapterScript, let framework = adapterFramework,
+              FileManager.default.isExecutableFile(atPath: "/usr/bin/perl"),
+              FileManager.default.fileExists(atPath: script.path),
+              FileManager.default.fileExists(atPath: framework.path)
+        else { logFailure("embedded MediaRemoteAdapter resources are missing"); return nil }
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/perl")
+        process.arguments = [script.path, framework.path] + arguments
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = FileHandle.nullDevice
+        do { try process.run() } catch {
+            logFailure("could not start MediaRemoteAdapter: \(error.localizedDescription)")
+            return nil
+        }
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else {
+            logFailure("MediaRemoteAdapter exited with status \(process.terminationStatus)")
+            return nil
+        }
+        return data
+    }
+
+    private func logFailure(_ message: String) {
+        guard !didLogFailure else { return }
+        didLogFailure = true
+        Log.note("native now-playing unavailable: \(message)")
+    }
+
     private static func fmtTime(_ s: String) -> String {
         guard let secs = Double(s), secs > 0 else { return "" }
         let t = Int(secs)
         return "\(t / 60):" + String(format: "%02d", t % 60)
     }
 
-    /// The shared cache as a dict, or nil if missing/stale/unreadable.
-    private func cacheDict() -> [String: Any]? {
-        guard let attrs = try? FileManager.default.attributesOfItem(atPath: cache),
-              let mtime = attrs[.modificationDate] as? Date,
-              Date().timeIntervalSince(mtime) <= staleSeconds,
-              let data = FileManager.default.contents(atPath: cache),
-              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-        else { return nil }
-        return obj
-    }
-
-    /// playbackRate may arrive as a number or a string ("1") — normalise to Double.
-    private func rate(_ v: Any?) -> Double {
-        if let n = v as? Double { return n }
-        if let s = v as? String { return Double(s) ?? 0 }
-        if let n = v as? Int { return Double(n) }
-        return 0
-    }
-
-    private func string(_ v: Any?) -> String { clean(v as? String ?? "") }
-    private func clean(_ s: String) -> String {
-        let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
-        return t == "null" ? "" : t
-    }
-
-    /// Spawn `nowplaying-cli <args>` and return stdout lines (empty on failure).
-    /// Used only for the fallback path and the toggle action — not per-tick when
-    /// the shared cache is live.
-    private func runNP(_ args: [String]) -> [String] {
-        guard FileManager.default.isExecutableFile(atPath: npCLI) else { return [] }
-        let p = Process()
-        p.executableURL = URL(fileURLWithPath: npCLI)
-        p.arguments = args
-        let pipe = Pipe()
-        p.standardOutput = pipe
-        p.standardError = FileHandle.nullDevice
-        do { try p.run() } catch { return [] }
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        p.waitUntilExit()
-        let out = String(data: data, encoding: .utf8) ?? ""
-        return out.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-    }
 }

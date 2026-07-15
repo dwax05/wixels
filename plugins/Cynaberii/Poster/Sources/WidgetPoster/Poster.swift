@@ -182,9 +182,9 @@ private struct PosterView: View {
                 HStack(spacing: 8) {
                     icon(shownPlaying ? "pause.fill" : "play.fill", cp.ink) { togglePlay() }
                     icon("shuffle", shuffleOn ? wAccent : cp.ink) {
-                        monitor.toggleShuffle(); shuffleOn.toggle()
+                        Task { await monitor.toggleShuffle() }; shuffleOn.toggle()
                     }
-                    icon("forward.fill", cp.ink) { monitor.next() }
+                    icon("forward.fill", cp.ink) { Task { await monitor.next() } }
                     icon(liked ? "heart.fill" : "heart", liked ? wAccent : cp.inkSoft) { liked.toggle() }
                 }
             }
@@ -245,7 +245,7 @@ private struct PosterView: View {
     }
 
     private func togglePlay() {
-        monitor.togglePlayPause()
+        Task { await monitor.togglePlayPause() }
         override.flip(to: !shownPlaying)
     }
 }

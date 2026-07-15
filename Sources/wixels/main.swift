@@ -44,7 +44,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // env vars still override (see Config).
         let cfg = Config.load()
         let menuEntries = makeMenuEntries(config: cfg)
-        let services = Services(nowplayingPath: cfg.nowplaying)   // shared samplers (cpu, music)
+        let services = Services()                                  // shared samplers (cpu, music)
         let host = WidgetHost(
             palette: PaletteStore(colorsPath: cfg.colors),
             menuEntries: menuEntries,

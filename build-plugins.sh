@@ -31,6 +31,27 @@ THEME_DEST="$DEST/themes"
 mkdir -p "$PLUGIN_DEST" "$THEME_DEST"
 rm -f "$PLUGIN_DEST"/*.dylib "$THEME_DEST"/*.dylib
 
+# System-wide now-playing reads use the bundled MediaRemote adapter through
+# Apple's entitled /usr/bin/perl. It is deliberately a resource, never linked
+# into WixelsKit, because the entitlement belongs to the system process.
+ADAPTER_SOURCE="$ROOT/Vendor/MediaRemoteAdapter"
+ADAPTER_BUILD="$ROOT/build/mediaremote-adapter/$CONFIG"
+ADAPTER_FRAMEWORK="$DEST/MediaRemoteAdapter.framework"
+ADAPTER_SCRIPT="$DEST/mediaremote-adapter.pl"
+[ "$CONFIG" = "debug" ] && ADAPTER_BUILD_TYPE="Debug" || ADAPTER_BUILD_TYPE="Release"
+[ -f "$ADAPTER_SOURCE/CMakeLists.txt" ] || {
+    echo "error: MediaRemoteAdapter submodule is missing; run git submodule update --init --recursive" >&2
+    exit 2
+}
+cmake -S "$ADAPTER_SOURCE" -B "$ADAPTER_BUILD" -DCMAKE_BUILD_TYPE="$ADAPTER_BUILD_TYPE" \
+    -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0
+cmake --build "$ADAPTER_BUILD" --target MediaRemoteAdapter
+rm -rf "$ADAPTER_FRAMEWORK"
+/bin/cp -R "$ADAPTER_BUILD/MediaRemoteAdapter.framework" "$ADAPTER_FRAMEWORK"
+/bin/cp -f "$ADAPTER_SOURCE/bin/mediaremote-adapter.pl" "$ADAPTER_SCRIPT"
+chmod +x "$ADAPTER_SCRIPT"
+codesign --force --deep --sign - "$ADAPTER_FRAMEWORK"
+
 selected() {
     local name="$1" selection="$2"
     [ "$selection" = "__all__" ] && return 0

@@ -6,10 +6,8 @@
 // minimal block is just `kind = "..."`. Order in the file is mount order (= z-stack
 // among same-level widgets). Unknown kinds are skipped by the resolver in main.
 //
-// A top-level `[paths]` table sets app-global data files (colors = wal palette,
-// nowplaying = music cache); those are threaded into PaletteStore/MusicMonitor in
-// main. Precedence for each: env var (WIXELS_COLORS/WIXELS_NOWPLAYING) > `[paths]` >
-// built-in default. Per-widget files stay in that widget's `[widget.options]`.
+// A top-level `[paths]` table sets app-global data files (currently the wal
+// palette). Per-widget files stay in that widget's `[widget.options]`.
 //
 // TOMLKit is confined to this file — the parsed result is plain WixelsKit types
 // (Placement overrides + Options), so plugins never see a TOML dependency.
@@ -41,7 +39,6 @@ struct LoadedConfig {
     var entries: [ConfigEntry] = []
     var theme: String?
     var colors: String?          // wal palette file (PaletteStore)
-    var nowplaying: String?      // music cache file (MusicMonitor)
 }
 
 /// Placement fields the config may override; nil = keep the spec's default.
@@ -99,9 +96,7 @@ enum Config {
                                theme: validThemeID(t["theme"]?.string),
                                placement: placement(from: t), options: options(from: t))
         } ?? []
-        return LoadedConfig(entries: entries, theme: theme,
-                            colors: paths?["colors"]?.string,
-                            nowplaying: paths?["nowplaying"]?.string)
+        return LoadedConfig(entries: entries, theme: theme, colors: paths?["colors"]?.string)
     }
 
     private static func validThemeID(_ id: String?) -> String? {

@@ -124,12 +124,10 @@ The optional `[paths]` table configures shared data files:
 ```toml
 [paths]
 colors = "~/.cache/wal/colors.json"
-nowplaying = "~/.cache/wixels/nowplaying.json"
 ```
 
 Environment variables take precedence over these paths: `WIXELS_CONFIG` selects a
-different layout file, `WIXELS_COLORS` selects a palette file, and
-`WIXELS_NOWPLAYING` selects the music cache.
+different layout file and `WIXELS_COLORS` selects a palette file.
 
 ## Add your own
 
@@ -184,6 +182,8 @@ If widgets do not appear, bring the desktop forward or check that their entries 
 enabled in the menu-bar menu. If a configuration edit is invalid, Wixels falls back
 to its default layout.
 
-Wixels reads now-playing information from a cache file rather than directly from
-MediaRemote. Set `[paths].nowplaying` or `WIXELS_NOWPLAYING` if your music publisher
-uses a different location.
+NowPlaying, Poster, and Pet read the active system media session directly. This uses
+the bundled MediaRemote adapter and supports apps that publish system now-playing
+metadata, such as Music, Spotify, and compatible browsers. If macOS denies the private
+MediaRemote interface after an OS update, the widgets show their idle state and Wixels
+logs one diagnostic to stderr.

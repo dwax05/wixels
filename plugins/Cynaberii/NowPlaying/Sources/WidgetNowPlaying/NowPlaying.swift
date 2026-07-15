@@ -2,9 +2,8 @@
 // two reels, and the current title/artist/state. Click toggles play/pause with an
 // optimistic flip (like the JS override) until the next poll reads the real state.
 //
-// Track data (incl. base64 album art) comes from MusicMonitor, which reads the
-// shared nowplaying.json a sketchybar music plugin publishes (default
-// ~/.cache/wixels/nowplaying.json; set via [paths] nowplaying).
+// Track data (incl. base64 album art) comes from MusicMonitor's embedded
+// MediaRemote adapter, which reads the active system media session directly.
 
 import AppKit
 import SwiftUI
@@ -28,7 +27,7 @@ struct NowPlaying: ThemeableWixel {
     func sample() async -> NowPlayingInfo { await monitor.nowPlaying() }
 
     func render(_ sample: NowPlayingInfo, _ theme: ThemeContext) -> some View {
-        NowPlayingView(info: sample, theme: theme, actions: NowPlayingActions { monitor.togglePlayPause() })
+        NowPlayingView(info: sample, theme: theme, actions: NowPlayingActions { await monitor.togglePlayPause() })
     }
 }
 
@@ -100,7 +99,7 @@ struct NowPlayingView: View {
 
     private func toggle() {
         guard info.hasTrack else { return }
-        actions.togglePlayPause()
+        Task { await actions.togglePlayPause() }
         override.flip(to: !shownPlaying)
     }
 }
