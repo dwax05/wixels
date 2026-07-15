@@ -219,7 +219,7 @@ private struct Precip: View {
     var body: some View {
         let n = 4
         let dur = snow ? 1.6 : 0.8
-        TimelineView(.animation) { ctx in
+        TimelineView(.periodic(from: .now, by: 1.0 / 10.0)) { ctx in
             let t = ctx.date.timeIntervalSinceReferenceDate
             ForEach(0..<n, id: \.self) { i in
                 let left = 8 + CGFloat(i) * (10 * px) / CGFloat(n)
@@ -245,7 +245,7 @@ private struct Precip: View {
 private struct Flash<Content: View>: View {
     @ViewBuilder let content: () -> Content
     var body: some View {
-        TimelineView(.animation) { ctx in
+        TimelineView(.periodic(from: .now, by: 1.0 / 10.0)) { ctx in
             let t = ctx.date.timeIntervalSinceReferenceDate
             let phase = (t / 2.5).truncatingRemainder(dividingBy: 1)
             content().opacity((0.92...0.98).contains(phase) ? 1 : 0.15)

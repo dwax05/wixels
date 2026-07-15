@@ -69,7 +69,9 @@ struct PixelFrame: View {
 }
 
 /// A sprite that may have multiple frames. One frame → static. Many frames →
-/// cycles at `frameMS` via TimelineView (only then does it animate).
+/// cycle at `frameMS`. Use a periodic schedule rather than `.animation`: pixel
+/// sprites have a discrete frame rate, so asking SwiftUI to redraw at display
+/// refresh wastes GPU wakeups between frames.
 public struct PixelStrip: View {
     let frames: [Sprite]
     let px: CGFloat
@@ -82,7 +84,7 @@ public struct PixelStrip: View {
 
     public var body: some View {
         if frames.count > 1 && frameMS > 0 {
-            TimelineView(.animation) { ctx in
+            TimelineView(.periodic(from: .now, by: frameMS / 1000)) { ctx in
                 let t = ctx.date.timeIntervalSinceReferenceDate
                 let i = Int((t * 1000 / frameMS).rounded(.down)) % frames.count
                 PixelFrame(grid: frames[i], px: px, palette: palette)
@@ -184,17 +186,20 @@ public struct RisingParticle: View {
     let dur: Double
     let rot: Double
     var scaleGrow: CGFloat = 0
+    var frameRate: Double = 12
 
     public init(sprite: Sprite, palette: [Character: Color], size: CGFloat, x: CGFloat,
                 baseY: CGFloat, rise: CGFloat, fadeIn: Double, delay: Double, dur: Double,
-                rot: Double, scaleGrow: CGFloat = 0) {
+                rot: Double, scaleGrow: CGFloat = 0, frameRate: Double = 12) {
         self.sprite = sprite; self.palette = palette; self.size = size; self.x = x
         self.baseY = baseY; self.rise = rise; self.fadeIn = fadeIn; self.delay = delay
-        self.dur = dur; self.rot = rot; self.scaleGrow = scaleGrow
+        self.dur = dur; self.rot = rot; self.scaleGrow = scaleGrow; self.frameRate = frameRate
     }
 
     public var body: some View {
-        TimelineView(.animation) { ctx in
+        // Pixel particles remain smooth at 12 fps while avoiding display-rate
+        // compositing for a decorative desktop effect.
+        TimelineView(.periodic(from: .now, by: 1.0 / frameRate)) { ctx in
             let t = ctx.date.timeIntervalSinceReferenceDate
             let phase = (((t - delay) / dur).truncatingRemainder(dividingBy: 1) + 1)
                 .truncatingRemainder(dividingBy: 1)

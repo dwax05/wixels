@@ -110,7 +110,7 @@ private struct WaterDrops: View {
 
     var body: some View {
         let cx = width / 2                       // plant is centred in the grid
-        TimelineView(.animation) { ctx in
+        TimelineView(.periodic(from: .now, by: 1.0 / 8.0)) { ctx in
             let t = ctx.date.timeIntervalSinceReferenceDate
             ForEach(0..<3, id: \.self) { i in
                 let dx: CGFloat = [-6, 0, 6][i]

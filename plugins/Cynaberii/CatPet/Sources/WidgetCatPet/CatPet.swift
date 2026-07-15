@@ -213,7 +213,7 @@ struct NotesLayer: View {
             ForEach(Array(NotesLayer.specs.enumerated()), id: \.offset) { i, spec in
                 RisingParticle(sprite: CatPet.note, palette: ["X": colors[i % colors.count]],
                                size: spec.size, x: spec.x, baseY: 44, rise: 40, fadeIn: 0.18,
-                               delay: spec.delay, dur: spec.dur, rot: spec.rot)
+                               delay: spec.delay, dur: spec.dur, rot: spec.rot, frameRate: 24)
             }
         }
     }
