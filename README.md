@@ -2,6 +2,7 @@
 
 <p align="center">
   <img src="docs/images/pet-cat.gif" alt="Animated pixel-art cat pet widget bobbing on the desktop with music notes floating beside it" width="200">
+  &nbsp;&nbsp;&nbsp;&nbsp;
   <img src="docs/images/plant-water.gif" alt="Animated pixel-art plant widget being watered" width="200">
 </p>
 
