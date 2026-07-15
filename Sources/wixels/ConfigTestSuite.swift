@@ -47,6 +47,30 @@ func runConfigTestSuite() -> Int32 {
         try expect(placed.anchor == .bottomLeft && placed.offset.width == 4 && placed.size == base.size,
                    "explicit placement fields override widget defaults selectively")
 
+        let malformedPlacement = try Config.parse("""
+        [[widget]]
+        kind = "clock"
+        offset = ["left", 5]
+        size = [10, "tall"]
+        """).entries[0].placement.apply(to: base)
+        try expect(malformedPlacement.offset == base.offset && malformedPlacement.size == base.size,
+                   "malformed placement values leave widget defaults intact")
+
+        let menuConfig = try Config.parse("""
+        [[widget]]
+        kind = "clock"
+        [[widget]]
+        kind = "clock"
+        enabled = false
+        [[widget]]
+        kind = "missing"
+        """)
+        let menu = widgetMenuEntries(config: menuConfig, registered: ["clock", "owl", "stats"])
+        try expect(menu.map(\.label) == ["clock", "clock #2", "owl", "stats"] &&
+                   menu.map(\.enabled) == [true, false, false, false] &&
+                   menu[2].sourceIndex == nil && menu[3].sourceIndex == nil,
+                   "menu includes unconfigured registered widgets as disabled entries")
+
         let colorConfig = try Config.parse("""
         [colors]
         file = "/tmp/wal.json"

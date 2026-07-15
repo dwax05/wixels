@@ -15,6 +15,25 @@
 import AppKit
 import WixelsKit
 
+/// Build the menu catalog from both configured rows and registered plugin kinds.
+/// Configured rows keep their file order (and permit duplicate mounts); registered
+/// kinds missing from the config are appended unchecked so users can enable them.
+func widgetMenuEntries(config: LoadedConfig, registered: Set<String>) -> [WidgetInfo] {
+    var seen: [String: Int] = [:]
+    var result: [WidgetInfo] = []
+    for entry in config.entries where registered.contains(entry.kind) {
+        let n = (seen[entry.kind] ?? 0) + 1
+        seen[entry.kind] = n
+        result.append(WidgetInfo(sourceIndex: entry.sourceIndex, kind: entry.kind,
+                                 label: n == 1 ? entry.kind : "\(entry.kind) #\(n)",
+                                 enabled: entry.enabled))
+    }
+    for kind in registered.subtracting(Set(seen.keys)).sorted() {
+        result.append(WidgetInfo(sourceIndex: nil, kind: kind, label: kind, enabled: false))
+    }
+    return result
+}
+
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     // The spec table is built once from plugin dylibs — reloads reuse it (dylibs are
@@ -84,19 +103,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Configured rows retain file order. Unknown config entries remain in the
-    /// config file, but are omitted until their plugin is loaded again.
+    /// config file, but are omitted until their plugin is loaded again. Registered
+    /// kinds without a row are appended unchecked, ready to be enabled.
     private func makeMenuEntries(config: LoadedConfig) -> [WidgetInfo] {
         let registered = Set(registrar.specs.keys).union(registrar.themedSpecs.keys)
-        var seen: [String: Int] = [:]
-        var result: [WidgetInfo] = []
-        for entry in config.entries where registered.contains(entry.kind) {
-            let n = (seen[entry.kind] ?? 0) + 1
-            seen[entry.kind] = n
-            result.append(WidgetInfo(sourceIndex: entry.sourceIndex, kind: entry.kind,
-                                     label: n == 1 ? entry.kind : "\(entry.kind) #\(n)",
-                                     enabled: entry.enabled))
-        }
-        return result
+        return widgetMenuEntries(config: config, registered: registered)
     }
 
     private func toggle(_ info: WidgetInfo) {

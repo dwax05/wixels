@@ -147,10 +147,20 @@ enum Config {
         var o = PlacementOverride()
         if let a = t["anchor"]?.string { o.anchor = WixelsKit.Anchor(rawValue: a) }
         if let off = t["offset"]?.array, off.count >= 2 {
-            let a = Array(off); o.offset = CGSize(width: num(a[0]), height: num(a[1]))
+            let values = Array(off)
+            if let x = number(values[0]), let y = number(values[1]) {
+                o.offset = CGSize(width: x, height: y)
+            } else {
+                Log.note("invalid widget offset — ignoring")
+            }
         }
         if let sz = t["size"]?.array, sz.count >= 2 {
-            let a = Array(sz); o.size = CGSize(width: num(a[0]), height: num(a[1]))
+            let values = Array(sz)
+            if let width = number(values[0]), let height = number(values[1]) {
+                o.size = CGSize(width: width, height: height)
+            } else {
+                Log.note("invalid widget size — ignoring")
+            }
         }
         if let z = t["zBoost"]?.int { o.zBoost = z }
         if let al = t["align"]?.string { o.align = alignment(al) }
@@ -231,8 +241,10 @@ enum Config {
         }
     }
 
-    private static func num(_ v: TOMLValueConvertible) -> CGFloat {
-        CGFloat(v.double ?? Double(v.int ?? 0))
+    private static func number(_ value: TOMLValueConvertible) -> CGFloat? {
+        if let number = value.double, number.isFinite { return CGFloat(number) }
+        if let integer = value.int { return CGFloat(integer) }
+        return nil
     }
 
     /// The TOML `align` strings, mapped like `Anchor(rawValue:)` does for anchors —
