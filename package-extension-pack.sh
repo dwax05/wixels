@@ -17,7 +17,6 @@ STAGING="$(mktemp -d "${TMPDIR:-/tmp}/wixels-extension-package.XXXXXX")"
 trap 'rm -rf "$STAGING"' EXIT
 PACK_ROOT="$STAGING/Wixels-Cynaberii-$VERSION"
 PLUGINS="$PACK_ROOT/plugins"
-THEMES="$PACK_ROOT/themes"
 RELEASE="$ROOT/.build/release"
 EXPECTED_PLUGINS=12
 
@@ -26,8 +25,8 @@ swift build -c release
 WIXELS_WIDGET_SUITE="$SUITE" "$ROOT/build-plugins.sh" release
 
 shopt -s nullglob
-widget_dylibs=("$ROOT/build/release/plugins"/libWidget*.dylib)
-theme_dylibs=("$ROOT/build/release/themes"/libTheme*.dylib)
+widget_dylibs=("$ROOT/build/release/plugins/$SUITE"/libWidget*.dylib)
+theme_dylibs=("$ROOT/build/release/plugins/$SUITE"/libTheme*.dylib)
 if [ "${#widget_dylibs[@]}" -ne "$EXPECTED_PLUGINS" ] || [ "${#theme_dylibs[@]}" -ne 1 ]; then
     echo "error: expected $EXPECTED_PLUGINS Cynaberii widgets and one theme" >&2
     exit 1
@@ -50,9 +49,9 @@ for binary in "${widget_dylibs[@]}" "${theme_dylibs[@]}"; do
     codesign --verify --strict --verbose=2 "$binary"
 done
 
-mkdir -p "$PLUGINS" "$THEMES"
-cp "${widget_dylibs[@]}" "$PLUGINS/"
-cp "${theme_dylibs[@]}" "$THEMES/"
+mkdir -p "$PLUGINS/$SUITE"
+cp "${widget_dylibs[@]}" "$PLUGINS/$SUITE/"
+cp "${theme_dylibs[@]}" "$PLUGINS/$SUITE/"
 cp "$ROOT/LICENSE" "$PACK_ROOT/LICENSE"
 cp "$ROOT/THIRD_PARTY_NOTICES.md" "$PACK_ROOT/THIRD_PARTY_NOTICES.md"
 cp "$ROOT/Vendor/MediaRemoteAdapter/LICENSE" "$PACK_ROOT/MediaRemoteAdapter-LICENSE"
@@ -66,16 +65,14 @@ EXTRACTED="$STAGING/extracted"
 mkdir -p "$EXTRACTED"
 ditto -x -k "$ZIP" "$EXTRACTED"
 EXTRACTED_ROOT="$EXTRACTED/Wixels-Cynaberii-$VERSION"
-if [ "$(find "$EXTRACTED_ROOT/plugins" -maxdepth 1 -name 'libWidget*.dylib' | wc -l | tr -d ' ')" -ne "$EXPECTED_PLUGINS" ] ||
-   [ "$(find "$EXTRACTED_ROOT/themes" -maxdepth 1 -name 'libTheme*.dylib' | wc -l | tr -d ' ')" -ne 1 ]; then
+if [ "$(find "$EXTRACTED_ROOT/plugins" -maxdepth 2 -name 'libWidget*.dylib' | wc -l | tr -d ' ')" -ne "$EXPECTED_PLUGINS" ] ||
+   [ "$(find "$EXTRACTED_ROOT/plugins/$SUITE" -maxdepth 1 -name 'libTheme*.dylib' | wc -l | tr -d ' ')" -ne 1 ]; then
     echo "error: archive lost extension payload" >&2
     exit 1
 fi
 mkdir -p "$STAGING/plugin-test-home/.config/wixels"
-mkdir -p "$STAGING/plugin-test-home/.config/wixels/plugins"
-cp "$EXTRACTED_ROOT/plugins"/*.dylib "$STAGING/plugin-test-home/.config/wixels/plugins/"
-mkdir -p "$STAGING/plugin-test-home/.config/wixels/themes"
-cp "$EXTRACTED_ROOT/themes"/*.dylib "$STAGING/plugin-test-home/.config/wixels/themes/"
+mkdir -p "$STAGING/plugin-test-home/.config/wixels/plugins/$SUITE"
+cp "$EXTRACTED_ROOT/plugins/$SUITE"/*.dylib "$STAGING/plugin-test-home/.config/wixels/plugins/$SUITE/"
 HOME="$STAGING/plugin-test-home" WIXELS_WIDGET_SUITE="$SUITE" "$RELEASE/wixels" --plugin-tests
 
 mkdir -p "$ROOT/dist"

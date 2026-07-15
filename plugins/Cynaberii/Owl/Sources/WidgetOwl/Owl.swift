@@ -16,7 +16,7 @@ struct Owl: ThemeableWixel {
     static func spec() -> ThemedWidgetSpec {
         ThemedWidgetSpec(widget: Self.self,
             defaultPlacement: .init(anchor: .bottomRight, offset: .init(width: 0, height: 150),
-                                    size: .init(width: 90, height: 70), sizing: .fitContent),
+                                    size: .init(width: 90, height: 70)),
             build: { _, _ in Owl(source: OwlSource()) })
     }
     static let refresh: RefreshPolicy = .interval(7)   // wake within ~7s of return

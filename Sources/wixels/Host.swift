@@ -95,7 +95,11 @@ struct WidgetInfo {
     let sourceIndex: Int?
     let kind: String
     let label: String
+    let group: String
+    let themeID: String?
     let enabled: Bool
+
+    var identity: PluginWidget { PluginWidget(group: group, kind: kind) }
 }
 
 struct LayoutSnapshot: Equatable {

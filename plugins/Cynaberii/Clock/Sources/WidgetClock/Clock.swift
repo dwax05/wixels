@@ -14,7 +14,7 @@ struct PixelClock: ThemeableWixel {
     static func spec() -> ThemedWidgetSpec {
         ThemedWidgetSpec(widget: Self.self,
             defaultPlacement: .init(anchor: .topCenter, offset: .init(width: 0, height: -70),
-                                    size: .init(width: 220, height: 120), zBoost: 1, sizing: .fitContent),
+                                    size: .init(width: 220, height: 120), zBoost: 1),
             build: { _, _ in PixelClock() })
     }
     static let refresh: RefreshPolicy = .interval(1)

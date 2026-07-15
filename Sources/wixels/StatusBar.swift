@@ -10,16 +10,24 @@ import WixelsKit
 @MainActor
 final class StatusBarController: NSObject, NSMenuDelegate {
     private var host: WidgetHost
+    private var folders: Set<String>
     private let toggleHandler: (WidgetInfo) -> Void
+    private let selectGroupHandler: (String) -> Void
     private let item: NSStatusItem
 
     /// Point at the host built by a live config reload. The menu is rebuilt on open
     /// (`menuNeedsUpdate`), so nothing else needs updating and the status item is reused.
-    func rebind(host: WidgetHost) { self.host = host }
-
-    init(host: WidgetHost, toggleHandler: @escaping (WidgetInfo) -> Void) {
+    func rebind(host: WidgetHost, folders: Set<String>? = nil) {
         self.host = host
+        if let folders { self.folders = folders }
+    }
+
+    init(host: WidgetHost, folders: Set<String>, toggleHandler: @escaping (WidgetInfo) -> Void,
+         selectGroupHandler: @escaping (String) -> Void) {
+        self.host = host
+        self.folders = folders
         self.toggleHandler = toggleHandler
+        self.selectGroupHandler = selectGroupHandler
         self.item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         super.init()
         item.button?.title = "w"
@@ -36,14 +44,32 @@ final class StatusBarController: NSObject, NSMenuDelegate {
             empty.isEnabled = false
             menu.addItem(empty)
         }
-        for info in infos {
-            let row = NSMenuItem(title: info.label,
-                                 action: #selector(toggle(_:)),
-                                 keyEquivalent: "")
-            row.state = info.enabled ? .on : .off
-            row.representedObject = info
-            row.target = self
-            menu.addItem(row)
+        let entriesByGroup = Dictionary(grouping: infos, by: \.group)
+        for group in folders.union(entriesByGroup.keys).sorted() {
+            let entries = entriesByGroup[group] ?? []
+            let folder = NSMenu(title: group)
+            let exclusive = NSMenuItem(title: "Enable Only This Folder",
+                                       action: #selector(enableOnly(_:)), keyEquivalent: "")
+            exclusive.representedObject = group
+            exclusive.target = self
+            folder.addItem(exclusive)
+            if !entries.isEmpty { folder.addItem(.separator()) }
+            for info in entries {
+                let row = NSMenuItem(title: info.label,
+                                     action: #selector(toggle(_:)), keyEquivalent: "")
+                row.state = info.enabled ? .on : .off
+                row.representedObject = info
+                row.target = self
+                folder.addItem(row)
+            }
+            if entries.isEmpty {
+                let unavailable = NSMenuItem(title: "Widgets load after switching folders", action: nil, keyEquivalent: "")
+                unavailable.isEnabled = false
+                folder.addItem(unavailable)
+            }
+            let folderItem = NSMenuItem(title: group, action: nil, keyEquivalent: "")
+            folderItem.submenu = folder
+            menu.addItem(folderItem)
         }
         menu.addItem(.separator())
         let openPlugins = NSMenuItem(title: "Open Plugin Folder…",
@@ -73,6 +99,11 @@ final class StatusBarController: NSObject, NSMenuDelegate {
     @objc private func toggle(_ sender: NSMenuItem) {
         guard let info = sender.representedObject as? WidgetInfo else { return }
         toggleHandler(info)
+    }
+
+    @objc private func enableOnly(_ sender: NSMenuItem) {
+        guard let group = sender.representedObject as? String else { return }
+        selectGroupHandler(group)
     }
 
     @objc private func toggleEdit(_ sender: NSMenuItem) {

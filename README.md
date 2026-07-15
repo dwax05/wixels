@@ -90,8 +90,8 @@ not notarized, so Gatekeeper blocks the first launch:
   works for unnotarized apps on Sequoia.
 
 The host intentionally contains no widgets. Extract the matching extension pack and
-follow its `INSTALL.md`: copy its `plugins/` files to `~/.config/wixels/plugins/` and
-`themes/` files to `~/.config/wixels/themes/`, then restart Wixels. Because the pack
+follow its `INSTALL.md`: copy its self-contained `plugins/` folder to
+`~/.config/wixels/plugins/`, then restart Wixels. Because the pack
 was downloaded, macOS quarantines the copied files; on the next launch Wixels asks
 for permission to remove the quarantine and loads the widgets immediately. If you
 decline, or on Wixels 0.1.0, clear it manually and restart:
@@ -104,8 +104,8 @@ Until extensions load, the menu says that no widgets are installed; if widgets a
 still missing after a restart, quarantine is the usual cause.
 
 To uninstall, quit Wixels, delete the app, and optionally remove
-`~/.config/wixels/plugins/libWidget*.dylib`,
-`~/.config/wixels/themes/libThemeCynaberii.dylib`, and `~/.config/wixels/desktop.toml`.
+`~/.config/wixels/plugins/`,
+`~/.config/wixels/desktop.toml`.
 Please report beta feedback and bugs through [GitHub Issues](https://github.com/dwax05/wixels/issues).
 
 If you are running from this repository, build the host and optional extensions separately:
@@ -128,7 +128,8 @@ your windows, so minimize or move a window aside to see them.
 
 Click the `w` icon in the menu bar to:
 
-- enable or hide individual widgets persistently;
+- browse widgets by plugin folder, enable or hide them individually, or choose
+  **Enable Only This Folder** to persistently switch to one folder's widgets;
 - turn on **Edit Layout**, then drag widgets into place;
 - choose **Reset Layout** to restore each widget's default position; or
 - quit Wixels.
@@ -153,6 +154,10 @@ Omit `enabled` (or set it to `true`) to mount a widget. Set `enabled = false` to
 hide it while keeping its placement, theme, and options for later re-enabling.
 Delete a widget entry to return it to the unconfigured state. The order of entries controls the stacking order
 when widgets overlap. You can set a global theme or override it for one widget:
+
+When the same widget binary exists in more than one plugin folder, menu actions add
+`folder = "..."` to distinguish those independent widget entries. You can also set
+that field yourself to select a specific immediate plugin folder.
 
 ```toml
 [theme]
@@ -225,13 +230,15 @@ change the host app to create either one.
 - [Writing themes](docs/writing-themes.md)
 - [Architecture notes](docs/architecture.md)
 
-Third-party widgets go in `~/.config/wixels/plugins/`, and themes go in
-`~/.config/wixels/themes/`. Build them with the same Swift toolchain as Wixels. They
+Third-party widgets go in `~/.config/wixels/plugins/`. Put each collection and its
+`libTheme*.dylib` in an immediate subfolder: that folder supplies both its menu
+submenu and theme. Flat legacy widgets and themes remain supported under
+**Ungrouped** / `~/.config/wixels/themes/`. Build them with the same Swift toolchain as Wixels. They
 run inside the app, so a broken extension can take down the host.
 
 Packaged extensions are installed in `Wixels.app/Contents/Resources/plugins` and
 `Wixels.app/Contents/Resources/themes`. At runtime Wixels searches those folders,
-then the two user folders above. It never scans the executable directory or SwiftPM
+including their descendants, then the two user folders above. It never scans the executable directory or SwiftPM
 build directories. `WIXELS_PLUGIN_ROOT` is only an explicit source-checkout staging
 override.
 
@@ -262,6 +269,17 @@ the current pixel-art `Cynaberii` suite is under `plugins/Cynaberii/`, while a f
 macOS suite may live under `plugins/Macos/`. Both share WixelsKit contracts, but only
 one suite can be selected for a build. `themes/Cynaberii` and `themes/Macos` are the
 corresponding theme packages.
+
+`WIXELS_WIDGET_SUITE` is a generic folder selector, not a fixed list of themes. Use
+it to build or run just one immediate plugin folder; leave it unset to combine
+unrelated folders. If two folders provide different dylibs with the same filename,
+Wixels keeps the first one it finds and logs the conflict rather than mixing their
+implementations.
+
+A folder that contains a `libTheme*.dylib` is a visual bundle. Its menu action
+**Enable Only This Folder** saves that folder as active and restarts Wixels so its
+widgets and theme are loaded together. This makes switching between complete looks
+safe even when their widgets use the same filenames.
 
 `./build-plugins.sh [debug|release]` stages no extensions unless a suite is selected:
 

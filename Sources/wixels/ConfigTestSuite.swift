@@ -65,11 +65,34 @@ func runConfigTestSuite() -> Int32 {
         [[widget]]
         kind = "missing"
         """)
-        let menu = widgetMenuEntries(config: menuConfig, registered: ["clock", "owl", "stats"])
+        let menu = widgetMenuEntries(config: menuConfig, available: [
+            PluginWidget(group: "Clocks", kind: "clock"),
+            PluginWidget(group: "Pets", kind: "owl"),
+            PluginWidget(group: "Ungrouped", kind: "stats"),
+        ])
         try expect(menu.map(\.label) == ["clock", "clock #2", "owl", "stats"] &&
                    menu.map(\.enabled) == [true, false, false, false] &&
+                   menu.map(\.group) == ["Clocks", "Clocks", "Pets", "Ungrouped"] &&
                    menu[2].sourceIndex == nil && menu[3].sourceIndex == nil,
-                   "menu includes unconfigured registered widgets as disabled entries")
+                   "menu groups configured and unconfigured registered widgets")
+
+        let duplicateFolders = try Config.parse("""
+        [[widget]]
+        kind = "clock"
+        folder = "Home"
+        [[widget]]
+        kind = "clock"
+        folder = "Work"
+        enabled = false
+        """)
+        let duplicateMenu = widgetMenuEntries(config: duplicateFolders, available: [
+            PluginWidget(group: "Home", kind: "clock"),
+            PluginWidget(group: "Work", kind: "clock"),
+        ])
+        try expect(duplicateMenu.map(\.group) == ["Home", "Work"] &&
+                   duplicateMenu.map(\.label) == ["clock", "clock"] &&
+                   duplicateMenu.map(\.enabled) == [true, false],
+                   "same plugin kind in separate folders remains separate")
 
         let colorConfig = try Config.parse("""
         [colors]
@@ -119,7 +142,7 @@ func runConfigTestSuite() -> Int32 {
         """.write(toFile: tempPath, atomically: true, encoding: .utf8)
         setenv("WIXELS_CONFIG", tempPath, 1)
         defer { unsetenv("WIXELS_CONFIG"); try? FileManager.default.removeItem(atPath: tempPath) }
-        Config.writeWidgetToggle(sourceIndex: 0, kind: "clock", enabled: false)
+        Config.writeWidgetToggle(sourceIndex: 0, kind: "clock", folder: "Cynaberii", themeID: "cynaberii", enabled: false)
         let preserved = try String(contentsOfFile: tempPath, encoding: .utf8)
         let preservedConfig = Config.load()
         try expect(preserved.contains("enabled = false") && preserved.contains("mystery = 'keep me'") &&
@@ -127,10 +150,31 @@ func runConfigTestSuite() -> Int32 {
                    preservedConfig.entries[0].options.int("answer") == 42,
                    "disabling preserves placement, options, and unknown fields")
 
-        Config.writeWidgetToggle(sourceIndex: nil, kind: "owl", enabled: true)
+        Config.writeWidgetToggle(sourceIndex: nil, kind: "owl", folder: "Cynaberii", themeID: "cynaberii", enabled: true)
         let appended = try String(contentsOfFile: tempPath, encoding: .utf8)
-        try expect(appended.contains("kind = 'owl'") && !appended.contains("enabled = true"),
-                   "enabling an absent widget writes a minimal entry")
+        try expect(appended.contains("kind = 'owl'") && appended.contains("folder = 'Cynaberii'") &&
+                   !appended.contains("enabled = true"),
+                   "enabling an absent widget writes a foldered minimal entry")
+
+        Config.writeExclusiveWidgetGroup(selected: [
+            PluginWidget(group: "Cynaberii", kind: "clock"),
+            PluginWidget(group: "Cynaberii", kind: "stats"),
+        ], configured: [
+            0: PluginWidget(group: "Cynaberii", kind: "clock"),
+            1: PluginWidget(group: "Cynaberii", kind: "owl"),
+        ], themeIDsByGroup: ["Cynaberii": "cynaberii"])
+        let exclusive = Config.load()
+        try expect(exclusive.entries.first(where: { $0.kind == "clock" })?.enabled == true &&
+                   exclusive.entries.first(where: { $0.kind == "owl" })?.enabled == false &&
+                   exclusive.entries.first(where: { $0.kind == "stats" })?.enabled == true &&
+                   exclusive.entries.first(where: { $0.kind == "clock" })?.theme == "cynaberii" &&
+                   exclusive.entries.first(where: { $0.kind == "clock" })?.options.int("answer") == 42,
+                   "folder selection enables selected kinds, disables others, and preserves fields")
+
+        Config.writeActivePluginFolder("Cynaberii")
+        let activeFolder = Config.selectedPluginFolder()
+        try expect(activeFolder == "Cynaberii",
+                   "active plugin folder persists independently of widget settings")
         print("PASS config suite")
         return 0
     } catch {

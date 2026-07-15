@@ -121,7 +121,8 @@ swift build
 WIXELS_PLUGIN_ROOT="$PWD/build/debug" ./.build/debug/wixels
 ```
 
-For a user install, copy `libWidgetMyThing.dylib` to `~/.config/wixels/plugins/`.
+For a user install, copy `libWidgetMyThing.dylib` to a collection folder such as
+`~/.config/wixels/plugins/MyCollection/`; that folder becomes its menu submenu.
 Packaged widgets belong in `Wixels.app/Contents/Resources/plugins`; the app never
 loads libraries from its executable or SwiftPM build directories. The release
 packager includes no suite unless `WIXELS_BUNDLED_WIDGET_SUITE=Cynaberii` (or a
