@@ -5,7 +5,7 @@ import PackageDescription
 // builds every plugins/* package into ./build and installs the dylibs next to the
 // wixels executable (.build/<config>/), where the host loads them at launch — no core
 // rebuild. Build with the SAME Swift toolchain as the core (no stable cross-version
-// Swift ABI). See DESIGN.md "Adding a widget".
+// Swift ABI). See docs/architecture.md.
 let package = Package(
     name: "WidgetNowPlaying",
     platforms: [.macOS(.v14)],
@@ -13,7 +13,7 @@ let package = Package(
         .library(name: "WidgetNowPlaying", type: .dynamic, targets: ["WidgetNowPlaying"]),
     ],
     dependencies: [
-        .package(path: "../../WixelsKit"),
+        .package(path: "../../../WixelsKit"),
     ],
     targets: [
         .target(name: "WidgetNowPlaying",

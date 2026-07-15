@@ -1,6 +1,8 @@
 # Writing themes
 
-A Wixels theme is a Swift package that defines a reusable visual style. Themes change
+A Wixels theme is a Swift package that defines a reusable visual style for a widget
+suite. `themes/Cynaberii` pairs with `plugins/Cynaberii`; `themes/Macos` is reserved
+for the future macOS widget suite. Themes change
 colors, typography, panels, media shapes, borders, shadows, and spacing. They do not
 replace widget content or move widgets.
 
@@ -61,7 +63,14 @@ Or build only your package:
 swift build --package-path themes/MyTheme
 ```
 
-The repository build stages the result under `build/debug/themes`. For a user
+The repository build stages the result under `build/debug/themes`. Select the paired
+widget suite explicitly when building a shipped theme:
+
+```sh
+WIXELS_WIDGET_SUITE=Cynaberii ./build-plugins.sh debug
+```
+
+For a user
 install, copy `libThemeMyTheme.dylib` to `~/.config/wixels/themes/`, then select it in
 `~/.config/wixels/desktop.toml`:
 
@@ -83,9 +92,8 @@ reloads the selected theme for already-installed libraries.
 
 Packaged themes belong in `Wixels.app/Contents/Resources/themes`. Wixels does not
 scan the executable or SwiftPM build directories; `WIXELS_PLUGIN_ROOT` is only for
-explicit source-checkout staging runs. The release packager includes only its
-explicit shipped-theme list; set `WIXELS_BUNDLED_THEMES=...` to intentionally add a
-custom theme.
+explicit source-checkout staging runs. The release packager includes the theme paired
+with the selected widget suite only; it includes no theme in a host-only package.
 
 ## Compatibility and safety
 

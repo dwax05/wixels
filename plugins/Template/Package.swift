@@ -4,7 +4,7 @@ import PackageDescription
 // Standalone widget plugin. Copy this whole `Template/` folder, rename it, and edit
 // Sources/WidgetTemplate/. `swift build` emits `.build/debug/libWidgetTemplate.dylib`
 // — drop that into ~/.config/wixels/plugins/ and the wixels host loads it at launch
-// (no core rebuild). See DESIGN.md "Adding a widget".
+// (no core rebuild). See docs/architecture.md.
 //
 // The one hard rule: build this with the SAME Swift toolchain as the core — Swift has
 // no stable cross-version ABI, so a mismatched plugin fails type identity across dlopen.

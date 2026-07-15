@@ -4,7 +4,7 @@ import PackageDescription
 // Standalone widget plugin producing libWidgetClock.dylib. The repo's ./build-plugins.sh
 // builds every plugins/* package into a staging directory for app resources — no core
 // rebuild. Build with the SAME Swift toolchain as the core (no stable cross-version
-// Swift ABI). See DESIGN.md "Adding a widget".
+// Swift ABI). See docs/architecture.md.
 let package = Package(
     name: "WidgetClock",
     platforms: [.macOS(.v14)],
@@ -12,7 +12,7 @@ let package = Package(
         .library(name: "WidgetClock", type: .dynamic, targets: ["WidgetClock"]),
     ],
     dependencies: [
-        .package(path: "../../WixelsKit"),
+        .package(path: "../../../WixelsKit"),
     ],
     targets: [
         .target(name: "WidgetClock",

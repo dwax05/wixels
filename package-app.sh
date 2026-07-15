@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build and package an Apple-silicon Wixels.app for personal distribution.
-# Usage: ./package-app.sh X.Y.Z
+# Usage: WIXELS_BUNDLED_WIDGET_SUITE=Cynaberii ./package-app.sh X.Y.Z
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
@@ -22,18 +22,21 @@ PLUGINS="$RESOURCES/plugins"
 THEMES="$RESOURCES/themes"
 PLIST="$APP/Contents/Info.plist"
 RELEASE="$ROOT/.build/release"
-BUNDLED_PLUGINS="${WIXELS_BUNDLED_PLUGINS-}"
-BUNDLED_THEMES="${WIXELS_BUNDLED_THEMES-}"
+BUNDLED_SUITE="${WIXELS_BUNDLED_WIDGET_SUITE-}"
+
+if [ -n "$BUNDLED_SUITE" ] && [ ! -d "$ROOT/plugins/$BUNDLED_SUITE" ]; then
+    echo "error: unknown widget suite '$BUNDLED_SUITE'" >&2
+    exit 2
+fi
 
 echo "==> building Wixels $VERSION"
 swift build -c release
-WIXELS_PLUGIN_SELECTION="$BUNDLED_PLUGINS" \
-WIXELS_THEME_SELECTION="$BUNDLED_THEMES" \
+WIXELS_WIDGET_SUITE="$BUNDLED_SUITE" \
     "$ROOT/build-plugins.sh" release
 
 echo "==> running release test suites"
 "$RELEASE/wixels" --config-tests
-if [ -n "$BUNDLED_PLUGINS" ]; then
+if [ -n "$BUNDLED_SUITE" ]; then
     WIXELS_PLUGIN_ROOT="$ROOT/build/release" "$RELEASE/wixels" --layout-tests
 else
     echo "==> no widgets bundled; skipping layout tests"
@@ -46,8 +49,10 @@ widget_dylibs=("$PLUGIN_BUILD"/libWidget*.dylib)
 theme_dylibs=("$THEME_BUILD"/libTheme*.dylib)
 expected_plugins=0
 expected_themes=0
-[ -z "$BUNDLED_PLUGINS" ] || expected_plugins="$(awk -F, '{print NF}' <<< "$BUNDLED_PLUGINS")"
-[ -z "$BUNDLED_THEMES" ] || expected_themes="$(awk -F, '{print NF}' <<< "$BUNDLED_THEMES")"
+if [ -n "$BUNDLED_SUITE" ]; then
+    expected_plugins="$(find "$ROOT/plugins/$BUNDLED_SUITE" -mindepth 2 -maxdepth 2 -name Package.swift | wc -l | tr -d ' ')"
+    expected_themes=1
+fi
 if [ "${#widget_dylibs[@]}" -ne "$expected_plugins" ]; then
     echo "error: expected $expected_plugins selected widget dylibs in $PLUGIN_BUILD" >&2
     exit 1
@@ -110,7 +115,7 @@ codesign --force --sign - "$MACOS/wixels"
 codesign --force --sign - "$APP"
 codesign --verify --deep --strict --verbose=2 "$APP"
 
-if [ "$expected_plugins" -eq 12 ] && [ "$expected_themes" -eq 2 ]; then
+if [ "$expected_plugins" -gt 0 ]; then
     echo "==> testing packaged plugins"
     "$MACOS/wixels" --plugin-tests
 else
@@ -125,7 +130,7 @@ EXTRACTED="$STAGING/extracted"
 mkdir -p "$EXTRACTED"
 ditto -x -k "$ZIP" "$EXTRACTED"
 codesign --verify --deep --strict --verbose=2 "$EXTRACTED/Wixels.app"
-if [ "$expected_plugins" -eq 12 ] && [ "$expected_themes" -eq 2 ]; then
+if [ "$expected_plugins" -gt 0 ]; then
     "$EXTRACTED/Wixels.app/Contents/MacOS/wixels" --plugin-tests
 fi
 

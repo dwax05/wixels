@@ -1,29 +1,27 @@
 #!/usr/bin/env bash
-# Build only the standalone widget and theme packages. Artifacts are staged outside
-# SwiftPM's package `.build` directories for copying into an app bundle or for an
-# explicit source-checkout run with WIXELS_PLUGIN_ROOT.
+# Build one widget suite and its paired theme suite into build/<config>.
 #
-# Usage: ./build-plugins.sh [debug|release]   (default: debug)
-#        ./build-plugins.sh clean             (remove plugin/theme staging artifacts)
-# Optional: WIXELS_PLUGIN_SELECTION=Clock,Frog WIXELS_THEME_SELECTION=Macos
-#           (select packages; unset builds all non-template packages)
+# Usage: WIXELS_WIDGET_SUITE=Cynaberii ./build-plugins.sh [debug|release]
+#        ./build-plugins.sh clean
+#
+# WIXELS_WIDGET_SUITE is deliberately opt-in. An unset suite stages no widgets
+# or themes, which keeps a future suite from being combined with this one by
+# accident. WIXELS_PLUGIN_SELECTION and WIXELS_THEME_SELECTION can narrow the
+# selected suite after it has been chosen.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 cd "$ROOT"
 
 if [ "${1:-}" = "clean" ]; then
-    for scratch in build plugins/*/.build themes/*/.build; do
-        if [ -d "$scratch" ]; then
-            echo "==> removing $scratch ($(du -sh "$scratch" | cut -f1))"
-            rm -rf "$scratch"
-        fi
-    done
+    rm -rf "$ROOT/build"
+    find "$ROOT/plugins" "$ROOT/themes" -type d -name .build -prune -exec rm -rf {} +
     echo "==> clean"
     exit 0
 fi
 
 CONFIG="${1:-debug}"
+SUITE="${WIXELS_WIDGET_SUITE-}"
 PLUGIN_SELECTION="${WIXELS_PLUGIN_SELECTION-__all__}"
 THEME_SELECTION="${WIXELS_THEME_SELECTION-__all__}"
 
@@ -40,10 +38,6 @@ selected() {
     return 1
 }
 
-# Never overwrite a loaded, signed dylib in place. A running wixels process may
-# still have that inode mapped; changing its pages makes macOS kill the process
-# with CODESIGNING / Invalid Page. Install a signed temporary copy by atomic rename
-# so existing processes keep the old inode and new launches see the new one.
 install_dylib() {
     local source="$1"
     local destination="$2/$(basename "$source")"
@@ -53,35 +47,38 @@ install_dylib() {
     /bin/mv -f "$temporary" "$destination"
 }
 
-for dir in plugins/*/; do
-    name="$(basename "$dir")"
-    # Template is the author example (copy it to make your own), not a shipped widget.
-    [ "$name" = "Template" ] && continue
-    selected "$name" "$PLUGIN_SELECTION" || continue
-    echo "==> building plugin: $name"
-    swift build --package-path "$dir" -c "$CONFIG" \
-        --product "Widget$name"
-    for dylib in "$dir/.build/$CONFIG"/libWidget*.dylib; do install_dylib "$dylib" "$PLUGIN_DEST"; done
-done
+if [ -z "$SUITE" ]; then
+    [ "$PLUGIN_SELECTION" = "__all__" ] || echo "warning: widget selection ignored without WIXELS_WIDGET_SUITE"
+    [ "$THEME_SELECTION" = "__all__" ] || echo "warning: theme selection ignored without WIXELS_WIDGET_SUITE"
+else
+    SUITE_ROOT="$ROOT/plugins/$SUITE"
+    THEME_ROOT="$ROOT/themes/$SUITE"
+    [ -d "$SUITE_ROOT" ] || { echo "error: unknown widget suite '$SUITE'" >&2; exit 2; }
+    [ -d "$THEME_ROOT" ] || { echo "error: no paired theme suite for '$SUITE'" >&2; exit 2; }
 
-for dir in themes/*/; do
-    name="$(basename "$dir")"
-    [ "$name" = "Template" ] && continue
-    selected "$name" "$THEME_SELECTION" || continue
-    echo "==> building theme: $name"
-    swift build --package-path "$dir" -c "$CONFIG" \
-        --product "Theme$name"
-    for dylib in "$dir/.build/$CONFIG"/libTheme*.dylib; do install_dylib "$dylib" "$THEME_DEST"; done
-done
+    while IFS= read -r manifest; do
+        dir="$(dirname "$manifest")"
+        name="$(basename "$dir")"
+        selected "$name" "$PLUGIN_SELECTION" || continue
+        echo "==> building plugin: $SUITE/$name"
+        swift build --package-path "$dir" -c "$CONFIG" --product "Widget$name"
+        for dylib in "$dir/.build/$CONFIG"/libWidget*.dylib; do install_dylib "$dylib" "$PLUGIN_DEST"; done
+    done < <(find "$SUITE_ROOT" -mindepth 2 -maxdepth 2 -name Package.swift -print | sort)
+
+    name="$SUITE"
+    if selected "$name" "$THEME_SELECTION"; then
+        echo "==> building theme: $name"
+        swift build --package-path "$THEME_ROOT" -c "$CONFIG" --product "Theme$name"
+        for dylib in "$THEME_ROOT/.build/$CONFIG"/libTheme*.dylib; do install_dylib "$dylib" "$THEME_DEST"; done
+    fi
+fi
 
 HOST="${WIXELS_HOST:-$ROOT/.build/$CONFIG/wixels}"
-if [ -x "$HOST" ] && [ "$PLUGIN_SELECTION" = "__all__" ] && [ "$THEME_SELECTION" = "__all__" ]; then
+if [ -x "$HOST" ] && [ -n "$SUITE" ]; then
     echo "==> validating staged extensions with $HOST"
-    WIXELS_PLUGIN_ROOT="$DEST" "$HOST" --plugin-tests
-elif [ -x "$HOST" ]; then
-    echo "==> selected extension set; skipping all-bundled runtime validation"
+    WIXELS_PLUGIN_ROOT="$DEST" WIXELS_WIDGET_SUITE="$SUITE" "$HOST" --plugin-tests
 else
-    echo "==> no host supplied; skipping runtime plugin validation"
+    echo "==> no selected suite or no host; skipping runtime plugin validation"
 fi
 
 echo "==> staged $(find "$PLUGIN_DEST" -name 'libWidget*.dylib' | wc -l | tr -d ' ') plugin(s) into $PLUGIN_DEST"

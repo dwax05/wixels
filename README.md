@@ -7,9 +7,10 @@ so your desktop can be useful without becoming another app to manage.
 Wixels is a native macOS app. It has no dock icon, runs from the menu bar, and uses
 your desktop wallpaper as its canvas.
 
-## What you get
+## Available extensions
 
-The bundled widgets include:
+The repository includes these widget packages, which can be built and installed or
+selected for packaging:
 
 - `clock` — time and date
 - `stats` — CPU, memory, and battery
@@ -24,7 +25,7 @@ The bundled widgets include:
 - `frog` — a temperature-reactive frog
 - `owl` — an idle/awake presence indicator
 
-There are two bundled looks:
+The repository also includes two themes:
 
 - `macos` uses system colors, materials, and automatic light/dark appearance.
 - `cynaberii` uses a pixel-art palette, square panels, and optional live colors from
@@ -42,7 +43,7 @@ For a packaged build, extract the ZIP and move `Wixels.app` to Applications. The
 personal-sharing build is ad-hoc signed, so macOS may ask you to right-click the app,
 choose **Open**, and confirm the first launch.
 
-If you are running from this repository, build the host and bundled extensions separately:
+If you are running from this repository, build the host and optional extensions separately:
 
 ```sh
 swift build
@@ -52,10 +53,10 @@ WIXELS_PLUGIN_ROOT="$PWD/build/debug" ./.build/debug/wixels
 
 Wixels starts in the foreground from a source build. Press `Ctrl-C` to stop it.
 
-On first launch, Wixels creates `~/.config/wixels/desktop.toml` and enables the
-bundled widgets. The widgets are behind your windows, so minimize or move a window
-aside to see them. The menu discovers every bundled or installed widget, including
-ones that are not yet in the configuration.
+On first launch, Wixels creates `~/.config/wixels/desktop.toml`. Packaged builds do
+not include extensions by default; install user extensions or explicitly select
+extensions when creating a package. The menu shows only loaded, configured widgets.
+The widgets are behind your windows, so minimize or move a window aside to see them.
 
 ## The menu-bar menu
 
@@ -137,7 +138,7 @@ change the host app to create either one.
 
 - [Writing widgets](docs/writing-widgets.md)
 - [Writing themes](docs/writing-themes.md)
-- [Architecture notes](DESIGN.md)
+- [Architecture notes](docs/architecture.md)
 
 Third-party widgets go in `~/.config/wixels/plugins/`, and themes go in
 `~/.config/wixels/themes/`. Build them with the same Swift toolchain as Wixels. They
@@ -160,11 +161,22 @@ To create an Apple-silicon app and ZIP for personal sharing:
 The output is written to `dist/Wixels.app` and
 `dist/Wixels-0.1.0-arm64.zip`.
 
-`swift build` builds only the host. `./build-plugins.sh [debug|release]` builds and
-stages standalone widget and theme packages. The release packager bundles no
-extensions by default; set `WIXELS_BUNDLED_PLUGINS` and/or
-`WIXELS_BUNDLED_THEMES` to comma-separated package names when intentionally adding
-extensions to a package. Empty values are valid when you want a host-only app.
+`swift build` builds only the host. Widget implementations live in explicit suites:
+the current pixel-art `Cynaberii` suite is under `plugins/Cynaberii/`, while a future
+macOS suite may live under `plugins/Macos/`. Both share WixelsKit contracts, but only
+one suite can be selected for a build. `themes/Cynaberii` and `themes/Macos` are the
+corresponding theme packages.
+
+`./build-plugins.sh [debug|release]` stages no extensions unless a suite is selected:
+
+```sh
+WIXELS_WIDGET_SUITE=Cynaberii ./build-plugins.sh debug
+WIXELS_BUNDLED_WIDGET_SUITE=Cynaberii ./package-app.sh 0.1.0
+```
+
+The release packager bundles no extensions by default. It never loads or packages
+multiple suites together; selected widgets retain their existing kinds such as
+`clock`, `stats`, and `frog`.
 
 ## Troubleshooting
 

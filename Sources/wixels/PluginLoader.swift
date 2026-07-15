@@ -85,11 +85,14 @@ enum PluginLoader {
             print("FAIL bundled plugins did not load: \(missing.sorted().joined(separator: ", "))")
             return 1
         }
-        guard registrar.themes["macos"] != nil, registrar.themes["cynaberii"] != nil else {
-            print("FAIL bundled themes did not load")
+        let suite = ProcessInfo.processInfo.environment["WIXELS_WIDGET_SUITE"]
+        let expectedThemes = suite.map { Set([$0.lowercased()]) } ?? Set(["macos", "cynaberii"])
+        let missingThemes = expectedThemes.subtracting(registrar.themes.keys)
+        guard missingThemes.isEmpty else {
+            print("FAIL bundled themes did not load: \(missingThemes.sorted().joined(separator: ", "))")
             return 1
         }
-        print("PASS 12 bundled plugins and 2 themes load at runtime")
+        print("PASS 12 bundled plugins and \(expectedThemes.count) theme(s) load at runtime")
         return 0
     }
 }
