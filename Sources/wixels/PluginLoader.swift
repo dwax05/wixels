@@ -7,7 +7,7 @@
 // types have a single runtime identity, so the call is safe.
 //
 // Search order: the running binary's own directory (build-plugins.sh installs the
-// built-in plugin dylibs next to the executable in build/<config>/), then
+// built-in plugin dylibs next to the executable in .build/<config>/), then
 // ~/.config/wixels/plugins for user drop-ins. A plugin that fails to load is logged
 // and skipped, never fatal.
 
