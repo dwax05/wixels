@@ -17,7 +17,7 @@ struct Poster: ThemeableWixel {
     static func spec() -> ThemedWidgetSpec {
         ThemedWidgetSpec(widget: Self.self,
             defaultPlacement: .init(anchor: .topRight, offset: .init(width: 0, height: -220),
-                                    size: .init(width: 230, height: 460), align: .trailing, sizing: .fitContent),
+                                    size: .init(width: 230, height: 460), align: .trailing),
             build: { s, _ in Poster(monitor: s.music) })
     }
     static let refresh: RefreshPolicy = .interval(4)

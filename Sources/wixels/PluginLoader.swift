@@ -13,29 +13,111 @@
 import Foundation
 import WixelsKit
 
+struct PluginWidget: Hashable {
+    let group: String
+    let kind: String
+}
+
+struct PluginCatalog {
+    var widgets = Set<PluginWidget>()
+    var themeIDsByGroup: [String: String] = [:]
+    var folders = Set<String>()
+}
+
 enum PluginLoader {
-    static func load(into registrar: Registrar, excluding excluded: Set<String> = []) {
+    static let ungrouped = "Ungrouped"
+
+    /// Loads extensions and returns each folder's widgets and bundled theme.
+    static func load(into registrar: Registrar, excluding excluded: Set<String> = []) -> PluginCatalog {
         var seen = Set<String>()
-        for dir in searchDirs() {
+        var catalog = PluginCatalog()
+        let dirs = searchDirs()
+        let requestedFolder = ProcessInfo.processInfo.environment["WIXELS_WIDGET_SUITE"]
+            .flatMap { $0.isEmpty ? nil : $0 } ?? Config.selectedPluginFolder()
+        let themedFolders = Set(dirs.filter { ($0 as NSString).lastPathComponent == "plugins" }.flatMap { dir in
+            loadableFiles(in: dir).filter { ($0 as NSString).lastPathComponent.hasPrefix("libTheme") }
+                .map(folder(for:)).filter { $0 != ungrouped }
+        })
+        let selectedFolder = requestedFolder ?? themedFolders.sorted().first
+        // Reuse the first loaded implementation for copies of the same plugin
+        // filename. Swift dylibs may contain Objective-C-visible classes, so dlopen
+        // of a second copy can produce duplicate-class warnings or crashes.
+        var loadedWidgetsByFilename: [String: (path: String, kinds: Set<String>)] = [:]
+        for dir in dirs {
             for file in loadableFiles(in: dir) where seen.insert(file).inserted {
                 let path = dir + "/" + file
                 guard !excluded.contains(path) else { continue }
-                loadOne(path, into: registrar)
+                let filename = (file as NSString).lastPathComponent
+                let group = folder(for: file)
+                if group != ungrouped { catalog.folders.insert(group) }
+                guard belongsToSelectedFolder(file, selectedFolder: selectedFolder,
+                                               themedFolders: themedFolders,
+                                               restrictAll: requestedFolder != nil) else { continue }
+                if filename.hasPrefix("libWidget"), let previous = loadedWidgetsByFilename[filename] {
+                    if FileManager.default.contentsEqual(atPath: path, andPath: previous.path) {
+                        catalog.widgets.formUnion(previous.kinds.map { PluginWidget(group: group, kind: $0) })
+                    } else {
+                        Log.note("duplicate plugin filename '\(filename)' in '\(group)' — keeping \(previous.path)")
+                    }
+                    continue
+                }
+                let isolated = Registrar()
+                loadOne(path, into: isolated)
+                for spec in isolated.specs.values { registrar.add(spec) }
+                for spec in isolated.themedSpecs.values { registrar.add(spec) }
+                for theme in isolated.themes.values { registrar.add(theme) }
+                if filename.hasPrefix("libWidget") {
+                    let kinds = Set(isolated.specs.keys).union(isolated.themedSpecs.keys)
+                    loadedWidgetsByFilename[filename] = (path, kinds)
+                    catalog.widgets.formUnion(kinds.map { PluginWidget(group: group, kind: $0) })
+                } else if filename.hasPrefix("libTheme"), group != ungrouped,
+                          let id = themeID(from: filename) {
+                    catalog.themeIDsByGroup[group] = id
+                }
             }
         }
+        return catalog
+    }
+
+    /// An explicit build/run selection limits widget dylibs to its matching first
+    /// folder. With no selection, independent folders compose freely.
+    static func belongsToSelectedFolder(_ relativePath: String, selectedFolder: String?,
+                                        themedFolders: Set<String> = [], restrictAll: Bool = true) -> Bool {
+        guard let selectedFolder else { return true }
+        let filename = (relativePath as NSString).lastPathComponent
+        guard filename.hasPrefix("libWidget") || filename.hasPrefix("libTheme") else { return true }
+        let group = folder(for: relativePath)
+        if group.caseInsensitiveCompare(selectedFolder) == .orderedSame { return true }
+        return !restrictAll && !themedFolders.contains(group)
+    }
+
+    private static func themeID(from filename: String) -> String? {
+        guard filename.hasPrefix("libTheme"), filename.hasSuffix(".dylib") else { return nil }
+        let start = filename.index(filename.startIndex, offsetBy: "libTheme".count)
+        let end = filename.index(filename.endIndex, offsetBy: -".dylib".count)
+        let id = String(filename[start..<end]).lowercased()
+        return ThemeManifest.isValidID(id) ? id : nil
     }
 
     static func loadableFiles(in directory: String) -> [String] {
-        guard let items = try? FileManager.default.contentsOfDirectory(atPath: directory) else {
+        guard let enumerator = FileManager.default.enumerator(atPath: directory) else {
             return []
         }
-        return items.filter(isLoadable).sorted()
+        return enumerator.compactMap { $0 as? String }.filter(isLoadable).sorted()
     }
 
     /// Only Wixels extension names are considered, avoiding unrelated libraries in
     /// either the app bundle or a user extension directory.
     private static func isLoadable(_ file: String) -> Bool {
-        ((file.hasPrefix("libWidget") || file.hasPrefix("libTheme")) && file.hasSuffix(".dylib"))
+        let name = (file as NSString).lastPathComponent
+        return ((name.hasPrefix("libWidget") || name.hasPrefix("libTheme")) && name.hasSuffix(".dylib"))
+    }
+
+    /// A folder means the first path component beneath a plugin root. Deeper
+    /// directories are scanned for convenience but do not create nested menus.
+    static func folder(for relativePath: String) -> String {
+        let parts = relativePath.split(separator: "/", omittingEmptySubsequences: true)
+        return parts.count > 1 ? String(parts[0]) : ungrouped
     }
 
     private static func searchDirs() -> [String] {
@@ -78,7 +160,7 @@ enum PluginLoader {
 
     static func runTestSuite() -> Int32 {
         let registrar = Registrar()
-        load(into: registrar)
+        _ = load(into: registrar)
         let suite = ProcessInfo.processInfo.environment["WIXELS_WIDGET_SUITE"]
         let expected: Set<String> = switch suite {
         case "Macos": ["clock", "stats", "weather", "nowplaying", "reminders", "poster"]

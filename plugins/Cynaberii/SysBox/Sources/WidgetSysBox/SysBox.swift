@@ -17,7 +17,7 @@ struct SysBox: ThemeableWixel {
     static func spec() -> ThemedWidgetSpec {
         ThemedWidgetSpec(widget: Self.self,
             defaultPlacement: .init(anchor: .topLeft, offset: .init(width: 40, height: -60),
-                                    size: .init(width: 180, height: 120), sizing: .fitContent),
+                                    size: .init(width: 180, height: 120)),
             build: { _, _ in SysBox(source: SysSource()) })
     }
     static let refresh: RefreshPolicy = .interval(30)

@@ -35,17 +35,31 @@ func runPluginLoaderPathTestSuite() -> Int32 {
         for name in ["libWidgetZ.dylib", "libWidgetA.dylib", "libUnrelated.dylib"] {
             try Data().write(to: first.appendingPathComponent(name))
         }
+        let nested = first.appendingPathComponent("Cynaberii")
+        try FileManager.default.createDirectory(at: nested, withIntermediateDirectories: true)
+        try Data().write(to: nested.appendingPathComponent("libWidgetNested.dylib"))
         try Data().write(to: second.appendingPathComponent("libWidgetA.dylib"))
         let firstFiles = PluginLoader.loadableFiles(in: first.path)
         let secondFiles = PluginLoader.loadableFiles(in: second.path)
-        guard firstFiles == ["libWidgetA.dylib", "libWidgetZ.dylib"],
+        guard firstFiles == ["Cynaberii/libWidgetNested.dylib", "libWidgetA.dylib", "libWidgetZ.dylib"],
               secondFiles == ["libWidgetA.dylib"] else {
             print("FAIL plugin loader sorting/filtering")
             return 1
         }
+        guard PluginLoader.folder(for: "Cynaberii/nested/libWidgetNested.dylib") == "Cynaberii" &&
+              PluginLoader.folder(for: "libWidgetA.dylib") == PluginLoader.ungrouped else {
+            print("FAIL plugin loader folder grouping")
+            return 1
+        }
+        guard PluginLoader.belongsToSelectedFolder("MyDesk/libWidgetClock.dylib", selectedFolder: "mydesk") &&
+              !PluginLoader.belongsToSelectedFolder("Elsewhere/libWidgetClock.dylib", selectedFolder: "MyDesk") &&
+              !PluginLoader.belongsToSelectedFolder("Elsewhere/libThemeElsewhere.dylib", selectedFolder: "MyDesk") else {
+            print("FAIL plugin loader folder selection")
+            return 1
+        }
         var seen = Set<String>()
         let unique = (firstFiles + secondFiles).filter { seen.insert($0).inserted }
-        guard unique == ["libWidgetA.dylib", "libWidgetZ.dylib"] else {
+        guard unique == ["Cynaberii/libWidgetNested.dylib", "libWidgetA.dylib", "libWidgetZ.dylib"] else {
             print("FAIL plugin loader duplicate suppression")
             return 1
         }

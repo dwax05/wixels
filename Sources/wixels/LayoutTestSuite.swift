@@ -39,7 +39,7 @@ func runLayoutTestSuite() -> Int32 {
     let config = Config.load()
     let services = Services()
     let registrar = Registrar()
-    PluginLoader.load(into: registrar)
+    _ = PluginLoader.load(into: registrar)
     let host = WidgetHost(palette: PaletteStore(colorsPath: config.colors.file,
                                                  overrides: config.colors.overrides),
                           placementWriter: { _ in })

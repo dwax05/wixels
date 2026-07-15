@@ -27,9 +27,11 @@ THEME_SELECTION="${WIXELS_THEME_SELECTION-__all__}"
 
 DEST="$ROOT/build/$CONFIG"
 PLUGIN_DEST="$DEST/plugins"
-THEME_DEST="$DEST/themes"
+THEME_DEST="$DEST/themes" # legacy flat-theme staging is kept empty for compatibility
 mkdir -p "$PLUGIN_DEST" "$THEME_DEST"
-rm -f "$PLUGIN_DEST"/*.dylib "$THEME_DEST"/*.dylib
+rm -rf "$PLUGIN_DEST"
+mkdir -p "$PLUGIN_DEST"
+rm -f "$THEME_DEST"/*.dylib
 
 # System-wide now-playing reads use the bundled MediaRemote adapter through
 # Apple's entitled /usr/bin/perl. It is deliberately a resource, never linked
@@ -63,6 +65,7 @@ install_dylib() {
     local source="$1"
     local destination="$2/$(basename "$source")"
     local temporary="$destination.installing"
+    mkdir -p "$2"
     /bin/cp -f "$source" "$temporary"
     codesign --force --sign - "$temporary"
     /bin/mv -f "$temporary" "$destination"
@@ -83,14 +86,14 @@ else
         selected "$name" "$PLUGIN_SELECTION" || continue
         echo "==> building plugin: $SUITE/$name"
         swift build --package-path "$dir" -c "$CONFIG" --product "Widget$name"
-        for dylib in "$dir/.build/$CONFIG"/libWidget*.dylib; do install_dylib "$dylib" "$PLUGIN_DEST"; done
+        for dylib in "$dir/.build/$CONFIG"/libWidget*.dylib; do install_dylib "$dylib" "$PLUGIN_DEST/$SUITE"; done
     done < <(find "$SUITE_ROOT" -mindepth 2 -maxdepth 2 -name Package.swift -print | sort)
 
     name="$SUITE"
     if selected "$name" "$THEME_SELECTION"; then
         echo "==> building theme: $name"
         swift build --package-path "$THEME_ROOT" -c "$CONFIG" --product "Theme$name"
-        for dylib in "$THEME_ROOT/.build/$CONFIG"/libTheme*.dylib; do install_dylib "$dylib" "$THEME_DEST"; done
+        for dylib in "$THEME_ROOT/.build/$CONFIG"/libTheme*.dylib; do install_dylib "$dylib" "$PLUGIN_DEST/$SUITE"; done
     fi
 fi
 
@@ -111,4 +114,4 @@ else
 fi
 
 echo "==> staged $(find "$PLUGIN_DEST" -name 'libWidget*.dylib' | wc -l | tr -d ' ') plugin(s) into $PLUGIN_DEST"
-echo "==> staged $(find "$THEME_DEST" -name 'libTheme*.dylib' | wc -l | tr -d ' ') theme(s) into $THEME_DEST"
+echo "==> staged $(find "$PLUGIN_DEST" -name 'libTheme*.dylib' | wc -l | tr -d ' ') theme(s) into $PLUGIN_DEST"

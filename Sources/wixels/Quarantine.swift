@@ -18,7 +18,7 @@ enum Quarantine {
     /// carrying the download quarantine attribute.
     static func flaggedExtensions(in directories: [String]) -> [String] {
         directories.flatMap { dir in
-            PluginLoader.loadableFiles(in: dir).map { dir + "/" + $0 }
+            PluginLoader.loadableFiles(in: dir).map { URL(fileURLWithPath: dir).appendingPathComponent($0).path }
         }.filter(isFlagged)
     }
 
