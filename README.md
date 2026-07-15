@@ -1,206 +1,161 @@
-# wixels
+# Wixels
 
-Native macOS desktop widgets — pixel-art gauges and pets that live on your wallpaper,
-behind your app windows. The classic theme recolours itself from an optional
-[pywal](https://github.com/dylanaraps/pywal) palette; native themes follow macOS appearance.
+Wixels puts small pixel-art widgets on your macOS desktop. Clocks, system gauges,
+pets, plants, weather, music, and other ambient details live behind your windows,
+so your desktop can be useful without becoming another app to manage.
 
-One tiny `.accessory` process draws everything on the desktop layer (on every Space, no
-dock icon, no Electron, no node server). Widgets and themes are loadable `.dylib`s, and
-a single TOML file decides which widgets run, how they look, and where they live.
+Wixels is a native macOS app. It has no dock icon, runs from the menu bar, and uses
+your desktop wallpaper as its canvas.
 
-> Replaces the cynaberii Übersicht widget set with a native Swift agent.
+## What you get
+
+The bundled widgets include:
+
+- `clock` — time and date
+- `stats` — CPU, memory, and battery
+- `sys` — Wi-Fi and disk status
+- `weather` — local conditions and temperature
+- `nowplaying` — the current track with play/pause controls
+- `poster` — album-art artwork for the current track
+- `disk-snail` — a snail that measures disk usage
+- `pet` — a cat that reacts to system activity
+- `plant` — a plant you can water
+- `quotes` — a clickable quote bubble
+- `frog` — a temperature-reactive frog
+- `owl` — an idle/awake presence indicator
+
+There are two bundled looks:
+
+- `macos` uses system colors, materials, and automatic light/dark appearance.
+- `cynaberii` uses a pixel-art palette, square panels, and optional live colors from
+  [pywal](https://github.com/dylanaraps/pywal).
 
 ## Requirements
 
-- macOS 14+ (built and run on 15.7)
-- Swift 6.2 toolchain (Xcode 16 or a matching Swift toolchain)
-- Optional: [pywal](https://github.com/dylanaraps/pywal) writing
-  `~/.cache/wal/colors.json` for live `cynaberii` recolouring
+- macOS 14 or newer
+- Apple silicon for the packaged app
+- Swift 6.2 when building from source
 
-## Build & run
+## Install and run
 
-Widgets are separate Swift packages, so a plain `swift build` builds only the host. Use
-the script:
+For a packaged build, extract the ZIP and move `Wixels.app` to Applications. The
+personal-sharing build is ad-hoc signed, so macOS may ask you to right-click the app,
+choose **Open**, and confirm the first launch.
 
-```sh
-./build-plugins.sh            # build host, bundled widgets, and bundled themes
-./.build/debug/wixels         # run (foreground; Ctrl-C to quit)
-```
-
-SwiftPM build output stays in `.build` directories. Other commands:
+If you are running from this repository, build the app and its bundled content with:
 
 ```sh
-./build-plugins.sh release    # optimized build
-./build-plugins.sh clean      # remove all Wixels SwiftPM .build directories
-pkill -x wixels               # stop a running instance (never `pkill -f`)
+./build-plugins.sh
+./.build/debug/wixels
 ```
 
-## Package for personal sharing
+Wixels starts in the foreground from a source build. Press `Ctrl-C` to stop it.
 
-Create an Apple-silicon app bundle and versioned ZIP from a release build:
+On first launch, Wixels creates `~/.config/wixels/desktop.toml` and enables the
+bundled widgets. The widgets are behind your windows, so minimize or move a window
+aside to see them.
+
+## The menu-bar menu
+
+Click the `w` icon in the menu bar to:
+
+- show or hide individual widgets for the current session;
+- turn on **Edit Layout**, then drag widgets into place;
+- choose **Reset Layout** to restore each widget's default position; or
+- quit Wixels.
+
+Layout changes made by dragging are saved to `desktop.toml`. Menu-bar visibility
+toggles are temporary and return to the configuration on the next launch.
+
+## Customize your desktop
+
+Edit `~/.config/wixels/desktop.toml` in any text editor. Wixels watches this file and
+reloads it after you save, so you can change the layout, theme, widget options, and
+data paths without restarting.
+
+The smallest widget entry is:
+
+```toml
+[[widget]]
+kind = "clock"
+```
+
+Delete a widget entry to disable it. The order of entries controls the stacking order
+when widgets overlap. You can set a global theme or override it for one widget:
+
+```toml
+[theme]
+default = "cynaberii"
+
+[[widget]]
+kind = "clock"
+theme = "macos"
+anchor = "topCenter"
+offset = [0, -70]
+size = [220, 120]
+```
+
+Useful placement fields are `anchor`, `offset = [x, y]`, `size = [width, height]`,
+`zBoost`, and `align`. Omit a field to keep the widget's built-in default.
+
+Widget-specific settings go in `[widget.options]`. For example:
+
+```toml
+[[widget]]
+kind = "disk-snail"
+
+  [widget.options]
+  path = "/"
+
+[[widget]]
+kind = "quotes"
+
+  [widget.options]
+  path = "~/.config/wixels/quotes.json"
+```
+
+The optional `[paths]` table configures shared data files:
+
+```toml
+[paths]
+colors = "~/.cache/wal/colors.json"
+nowplaying = "~/.cache/wixels/nowplaying.json"
+```
+
+Environment variables take precedence over these paths: `WIXELS_CONFIG` selects a
+different layout file, `WIXELS_COLORS` selects a palette file, and
+`WIXELS_NOWPLAYING` selects the music cache.
+
+## Add your own
+
+Wixels is designed to be extended with drop-in widgets and themes. You do not need to
+change the host app to create either one.
+
+- [Writing widgets](docs/writing-widgets.md)
+- [Writing themes](docs/writing-themes.md)
+- [Architecture notes](DESIGN.md)
+
+Third-party widgets go in `~/.config/wixels/plugins/`, and themes go in
+`~/.config/wixels/themes/`. Build them with the same Swift toolchain as Wixels. They
+run inside the app, so a broken extension can take down the host.
+
+## Build a release package
+
+To create an Apple-silicon app and ZIP for personal sharing:
 
 ```sh
 ./package-app.sh 0.1.0
 ```
 
-The command builds and tests the host, all 12 bundled widgets, and both bundled themes,
-then writes `dist/Wixels.app` and `dist/Wixels-0.1.0-arm64.zip`. It requires Apple
-silicon and macOS 14 or newer. The app keeps using `~/.config/wixels` for configuration,
-including third-party plugins and themes.
+The output is written to `dist/Wixels.app` and
+`dist/Wixels-0.1.0-arm64.zip`.
 
-To install it on another Mac, extract the ZIP and move `Wixels.app` to Applications.
-This personal-sharing build is ad-hoc signed, not Developer ID signed or notarized, so
-Gatekeeper may block the first launch. Right-click the app, choose **Open**, then confirm
-that you want to open it. A future public distribution would need Developer ID signing
-and Apple notarization; this command intentionally does neither.
+## Troubleshooting
 
-On first run wixels writes a default layout to `~/.config/wixels/desktop.toml` with
-every widget enabled. Widgets sit behind your app windows — bring your desktop forward
-(or minimize windows) to see them.
+If widgets do not appear, bring the desktop forward or check that their entries are
+enabled in the menu-bar menu. If a configuration edit is invalid, Wixels falls back
+to its default layout.
 
-## Widgets and themes
-
-All twelve bundled widgets own one canonical content tree, sampling policy, interactions,
-and placement. Themes are universal token packages: they change semantic colors,
-typography, card fill/shape/border/shadow, media shape, and spacing density without replacing content.
-`macos` uses system colors, typography, regular material, rounded cards, and automatic
-light/dark adaptation. `cynaberii` uses Silkscreen, the live pywal palette, square panes,
-accent borders, and offset shadows.
-
-| kind | behavior / classic appearance |
-|------|-------------------------------|
-| `clock` | local time and date / blinking pixel digits |
-| `stats` | CPU, memory, battery / plant, soil, and heart |
-| `sys` | wifi bars + disk jar |
-| `disk-snail` | a snail that crawls the box perimeter over 24h as a disk gauge |
-| `pet` | a cat reacting to CPU / network / battery / music |
-| `plant` | click-to-water growth that persists |
-| `quotes` | a speech bubble; click to reroll |
-| `frog` | thermal-reactive frog that pops out from behind the clock |
-| `owl` | idle-presence gauge (awake / drowsy / asleep) |
-| `weather` | pixel sky + temperature (NWS → open-meteo) |
-| `nowplaying` | track state and play/pause / pixel cassette with album art |
-| `poster` | a now-playing card recoloured from the album cover |
-
-## Configuring the layout
-
-Edit `~/.config/wixels/desktop.toml` (override the path with `WIXELS_CONFIG`). Each
-`[[widget]]` block enables a widget by `kind`; delete a block to disable it. Placement
-fields are optional — omit them to use the widget's built-in default. The file is watched:
-save an edit and wixels reloads it live — adding, removing, re-placing, re-theming, or
-re-optioning widgets without a restart, including `[paths]`. (Live menu-bar toggles and
-in-progress layout edits reset on reload, the same as on relaunch.)
-
-wixels also writes the file back in one case: dragging a widget in the menu-bar layout
-editor and saving persists its new `offset` by regenerating `desktop.toml`. Every widget
-block, option, and unknown field is retained, but comments and hand-formatting are dropped
-(this self-write does not trigger a reload).
-
-```toml
-[theme]
-default = "macos" # optional: macos is also the default when this table is absent
-
-# App-global data files (env WIXELS_COLORS / WIXELS_NOWPLAYING override these).
-[paths]
-colors     = "~/.cache/wal/colors.json"        # optional pywal palette for compatible themes
-nowplaying = "~/.cache/wixels/nowplaying.json" # music cache your publisher writes
-
-[[widget]]
-kind = "clock"
-theme = "cynaberii"      # optional per-widget override
-anchor = "topCenter"     # topLeft topRight bottomLeft bottomRight center topCenter
-offset = [0, -70]        # [x, y]
-size   = [220, 120]      # [w, h]
-zBoost = 1               # optional; raises stacking among same-level widgets
-align  = "trailing"      # optional
-
-[[widget]]
-kind = "disk-snail"
-  [widget.options]       # optional per-widget settings
-  path = "/"             # volume the disk gauge measures
-
-[[widget]]
-kind = "quotes"
-  [widget.options]
-  path = "~/.config/wixels/quotes.json"   # JSON array of quote strings
-```
-
-Block order = mount order = stacking order among widgets that share a window level (the
-frog is listed before the clock so the clock draws in front and hides the frog's body).
-
-Theme resolution is widget override → global default → `macos`. Unknown or malformed
-IDs use `macos`. Since every theme is universal, changing themes never changes window
-placement; explicit placement fields win field-by-field and Reset Layout restores the
-widget's own defaults.
-
-Paths resolve in the order **env var → `[paths]`/`[widget.options]` → built-in default**,
-so a missing config key just falls back to the default. `[paths]` holds app-global files
-(shared by several widgets); per-widget files live in that widget's `[widget.options]`.
-
-## Writing your own widget
-
-A widget is a small Swift package producing a `libWidget<Name>.dylib`. Copy the example:
-
-```sh
-cp -r plugins/Template plugins/MyThing
-```
-
-Then edit `plugins/MyThing/Sources/WidgetMyThing/` — implement `spec()` (registration,
-defaults, and construction), `sample()` (fetch data), and `render(_:_:)` (construct the
-view from your sample + palette) — build with `./build-plugins.sh`, and add a
-`[[widget]] kind = "my-thing"` block to your TOML.
-You never touch the host: it supplies the window, desktop pinning, palette, scheduler,
-and occlusion pause. Passive widgets should render deterministically from the supplied
-sample and palette. Interactive widgets may keep local UI state or invoke explicit
-user actions, but should not perform scheduled sampling from `render`. See
-`plugins/Template/` for the fully-commented starting point.
-
-Third-party plugins can be dropped into `~/.config/wixels/plugins/` and loaded without
-rebuilding the core — build them with the **same Swift toolchain** as wixels (Swift has
-no stable cross-version ABI). Plugins run in-process, so a crashing plugin takes down the
-host.
-
-## Writing a theme
-
-Theme dylibs provide one universal `ThemeDefinition`. Copy `themes/Template`, register a
-stable lowercase-kebab-case manifest plus `ThemeTokens` (including card and media shapes),
-and rebuild with `./build-plugins.sh`. User themes may be installed in
-`~/.config/wixels/themes/`.
-
-```swift
-registrar.add(ThemeDefinition(
-    manifest: .init(id: "my-theme", name: "My Theme"),
-    tokens: ThemeDefinition.macos.tokens
-))
-```
-
-Theme authors never import widget sample/action types. The registrar validates IDs and
-keeps the first duplicate definition. Theme packs run in-process and must use the same
-Swift toolchain as the host and plugins.
-
-## How it works
-
-Four roles across Swift packages:
-
-- **`WixelsKit`** — the shared dynamic ABI: `Wixel`, `ThemeableWixel`, universal theme
-  tokens, the render kit, palette, data sources, placement, and registrar. Host,
-  widgets, and themes all link this one runtime copy so type identity holds across
-  `dlopen`.
-- **`wixels`** — the host executable: desktop windows, one shared refresh scheduler,
-  occlusion-aware pause, the plugin loader, and the TOML config reader.
-- **`plugins/<Name>/`** — one package per widget, each a drop-in `.dylib`. The 12
-  built-ins are themselves plugins.
-- **`themes/<Name>/`** — universal token packages loaded as `libTheme*.dylib`.
-
-At launch the host loads `libWidget*.dylib` from the executable directory and
-`~/.config/wixels/plugins/`, plus `libTheme*.dylib` from the executable directory and
-`~/.config/wixels/themes/`. It then reads `desktop.toml`, resolves tokens for each
-themeable widget, and mounts the widget's canonical view. Interval widgets share a single scheduler loop;
-occluded widgets stop sampling.
-
-## Notes
-
-Personal project, not App Store shippable. Now-playing data (title/artist/artwork) is
-read from a shared cache file (`~/.cache/wixels/nowplaying.json` by default; set via
-`[paths] nowplaying`) that an external music plugin publishes, since in-process
-`MediaRemote` no longer works for ad-hoc binaries on recent macOS.
+Wixels reads now-playing information from a cache file rather than directly from
+MediaRemote. Set `[paths].nowplaying` or `WIXELS_NOWPLAYING` if your music publisher
+uses a different location.
