@@ -1,5 +1,6 @@
 import WixelsKit
 import SwiftUI
+import Foundation
 
 @MainActor
 enum SchedulerTests {
@@ -8,6 +9,7 @@ enum SchedulerTests {
         try await refreshOnceOnlyTicksActiveIdleStaticWidgets()
         try await overlappingPetReadsRemainValid()
         try universalThemeRegistryResolvesAndPreservesPlacement()
+        try paletteLayersResolvePerTheme()
         print("PASS scheduler suite")
     }
 
@@ -15,7 +17,8 @@ enum SchedulerTests {
         let registrar = Registrar()
         registrar.add(TestThemeable.spec())
         let native = ThemeDefinition(manifest: .init(id: "native", name: "Native"),
-                                     tokens: ThemeDefinition.macos.tokens)
+                                     tokens: ThemeDefinition.macos.tokens,
+                                     defaultPalette: ThemeDefinition.macos.defaultPalette)
         try check(native.tokens.card.shape == .rounded(16), "macos theme rounds cards")
         try check(native.tokens.mediaShape == .rounded(8), "macos theme rounds media")
         try check(ThemeDefinition.cynaberii.tokens.card.shape == .rectangle,
@@ -31,7 +34,8 @@ enum SchedulerTests {
                                                services: Services(), options: .empty)
         try check(fallback?.themeID == "macos", "unknown theme falls back to macos")
         registrar.add(ThemeDefinition(manifest: .init(id: "native", name: "Duplicate"),
-                                      tokens: ThemeDefinition.cynaberii.tokens))
+                                      tokens: ThemeDefinition.cynaberii.tokens,
+                                      defaultPalette: ThemeDefinition.cynaberii.defaultPalette))
         try check(registrar.resolveTheme("native") == native, "duplicate theme keeps first registration")
     }
 
@@ -82,6 +86,39 @@ enum SchedulerTests {
         try check(readings.count == 8, "overlapping pet reads all complete")
         try check(readings.allSatisfy { (0...1).contains($0.cpu) },
                   "overlapping pet reads return valid CPU samples")
+    }
+
+    private static func paletteLayersResolvePerTheme() throws {
+        let pid = ProcessInfo.processInfo.processIdentifier
+        let configured = "/tmp/wixels-configured-colors-\(pid).json"
+        let selected = "/tmp/wixels-selected-colors-\(pid).json"
+        defer {
+            unsetenv("WIXELS_COLORS")
+            try? FileManager.default.removeItem(atPath: configured)
+            try? FileManager.default.removeItem(atPath: selected)
+        }
+        try """
+        {"special":{"background":"111111"},"colors":{"color0":"222222","color1":"333333"}}
+        """.write(toFile: configured, atomically: true, encoding: .utf8)
+        try """
+        {"special":{"foreground":"444444"},"colors":{"color0":"555555"}}
+        """.write(toFile: selected, atomically: true, encoding: .utf8)
+        setenv("WIXELS_COLORS", selected, 1)
+        let store = PaletteStore(colorsPath: configured,
+            overrides: .init(background: RGB(hex: "666666"), accents: [RGB(hex: "777777")]))
+        defer { store.stop() }
+
+        let macos = store.resolvedPalette(for: .macos)
+        let cynaberii = store.resolvedPalette(for: .cynaberii)
+        try check(macos.background == RGB(hex: "666666") && macos.foreground == RGB(hex: "444444") &&
+                  macos.c(0) == RGB(hex: "777777"),
+                  "TOML palette values override environment-selected file values")
+        try check(macos.c(1) == ThemeDefinition.macos.defaultPalette.c(1),
+                  "environment-selected file replaces configured file rather than composing with it")
+        try check(macos.c(2) == ThemeDefinition.macos.defaultPalette.c(2) &&
+                  cynaberii.c(2) == ThemeDefinition.cynaberii.defaultPalette.c(2) &&
+                  macos.c(2) != cynaberii.c(2),
+                  "partial palettes fall back per value to each widget theme")
     }
 
     private static func waitUntil(

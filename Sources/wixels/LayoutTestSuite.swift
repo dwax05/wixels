@@ -10,7 +10,8 @@ func runLayoutTestSuite() -> Int32 {
     let services = Services()
     let registrar = Registrar()
     PluginLoader.load(into: registrar)
-    let host = WidgetHost(palette: PaletteStore(colorsPath: config.colors),
+    let host = WidgetHost(palette: PaletteStore(colorsPath: config.colors.file,
+                                                 overrides: config.colors.overrides),
                           placementWriter: { _ in })
 
     for entry in config.entries {

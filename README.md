@@ -5,7 +5,7 @@ pets, plants, weather, music, and other ambient details live behind your windows
 so your desktop can be useful without becoming another app to manage.
 
 Wixels is a native macOS app. It has no dock icon, runs from the menu bar, and uses
-your desktop wallpaper as its canvas.
+the desktop layer as its canvas.
 
 ## Available extensions
 
@@ -74,7 +74,7 @@ Layout changes made by dragging and menu-bar visibility toggles are saved to
 
 Edit `~/.config/wixels/desktop.toml` in any text editor. Wixels watches this file and
 reloads it after you save, so you can change the layout, theme, widget options, and
-data paths without restarting.
+palette settings without restarting.
 
 The smallest widget entry is:
 
@@ -119,15 +119,36 @@ kind = "quotes"
   path = "~/.config/wixels/quotes.json"
 ```
 
-The optional `[paths]` table configures shared data files:
+## Colors and palettes
+
+The optional top-level `[colors]` table can point to a
+[pywal](https://github.com/dylanaraps/pywal)-compatible `colors.json` file and/or
+override individual palette values. This is useful both for a fully custom palette
+and for making a small adjustment to a live pywal palette:
 
 ```toml
-[paths]
-colors = "~/.cache/wal/colors.json"
+[colors]
+file = "~/.cache/wal/colors.json"
+background = "#102021"
+foreground = "F3E9D2"
+color0 = "#1A2C2D" # color1 through color15 are also supported
 ```
 
-Environment variables take precedence over these paths: `WIXELS_CONFIG` selects a
-different layout file and `WIXELS_COLORS` selects a palette file.
+Use `background`, `foreground`, and any of `color0` through `color15`. Each color
+must be exactly six hexadecimal digits, with or without a leading `#`; invalid values
+are logged and ignored. Unknown `[colors]` keys are harmless.
+
+Every color resolves separately, so a partial configuration still works:
+
+1. Explicit `[colors]` value
+2. The palette file selected by `WIXELS_COLORS`
+3. `[colors].file`, or `~/.cache/wal/colors.json` when it is omitted
+4. The active theme's complete default palette
+
+`WIXELS_COLORS` replaces only the palette file choice—it never overrides explicit
+TOML colors. This also means widgets using different themes use their own defaults
+for any missing components. Older `[paths].colors` entries are ignored; move the
+path to `[colors].file`. `WIXELS_CONFIG` selects a different layout file.
 
 ## Add your own
 

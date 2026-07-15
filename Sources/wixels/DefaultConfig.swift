@@ -27,9 +27,13 @@ extension Config {
     # anchors: topLeft topRight bottomLeft bottomRight center topCenter
     # A [widget.options] table passes per-widget settings (e.g. disk-snail path).
 
-    # App-global data files. WIXELS_COLORS overrides this palette path.
-    [paths]
-    colors = "~/.cache/wal/colors.json" # pywal palette — recolours everything
+    # Optional palette. WIXELS_COLORS replaces only `file`; individual values below
+    # always win. Omit any value to use the pywal file, then the selected theme default.
+    [colors]
+    file = "~/.cache/wal/colors.json"
+    # background = "#102021"
+    # foreground = "F3E9D2"
+    # color0 = "#1A2C2D" # color1 through color15 are also supported
 
     [[widget]]
     kind = "sys"

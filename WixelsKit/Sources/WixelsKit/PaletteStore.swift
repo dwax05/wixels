@@ -2,9 +2,8 @@
 // WixelsKit (public) because the erased WidgetView observes it across the plugin
 // ABI; the host constructs the single instance and injects it.
 //
-// One source (wal colors.json), so this is NOT a seam — but its interface is
-// deep: it hides file-watching, pywal's in-place rewrite, JSON parsing, and
-// publishing behind `@Published var palette`.
+// It hides file-watching, pywal's in-place rewrite, JSON parsing, and sparse
+// palette layering behind `@Published var palette`.
 
 import SwiftUI
 import Combine
@@ -18,14 +17,16 @@ public final class PaletteStore: ObservableObject, @unchecked Sendable {
     @Published public var palette: Palette = .fallback
     @Published public var reloadCount = 0
 
-    // Watched palette file. Precedence: WIXELS_COLORS env > the config's `[paths]`
-    // colors (passed by the host) > the pywal default.
+    // WIXELS_COLORS replaces only the configured file path.
     private let file: String
+    private let overrides: PaletteOverrides
+    private var fileOverrides = PaletteOverrides()
     private var source: DispatchSourceFileSystemObject?
     private var fd: Int32 = -1
     private var directorySource: DispatchSourceFileSystemObject?
 
-    public init(colorsPath: String? = nil) {
+    public init(colorsPath: String? = nil, overrides: PaletteOverrides = .init()) {
+        self.overrides = overrides
         file = Paths.resolve(env: "WIXELS_COLORS", config: colorsPath,
                              default: "~/.cache/wal/colors.json")
         reload()
@@ -39,18 +40,32 @@ public final class PaletteStore: ObservableObject, @unchecked Sendable {
         dispatchPrecondition(condition: .onQueue(.main))
         guard
             let data = FileManager.default.contents(atPath: file),
-            let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-            let special = obj["special"] as? [String: String],
-            let colors = obj["colors"] as? [String: String]
+            let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else { return }
 
-        let accents = (0..<16).map { RGB(hex: colors["color\($0)"] ?? "") ?? RGB(120, 120, 120) }
-        let new = Palette(
-            background: RGB(hex: special["background"] ?? "") ?? Palette.fallback.background,
-            foreground: RGB(hex: special["foreground"] ?? "") ?? Palette.fallback.foreground,
-            accents: accents
-        )
+        let special = obj["special"] as? [String: Any] ?? [:]
+        let colors = obj["colors"] as? [String: Any] ?? [:]
+
+        fileOverrides = PaletteOverrides(background: fileColor(special, key: "background"),
+                                        foreground: fileColor(special, key: "foreground"),
+                                        accents: (0..<16).map { fileColor(colors, key: "color\($0)") })
+        let new = overrides.applying(to: fileOverrides.applying(to: .fallback))
         if new != palette { palette = new; reloadCount += 1 }
+    }
+
+    /// Themed widgets get their own default palette for values their selected file
+    /// and TOML configuration leave unspecified. Legacy widgets retain `.palette`.
+    public func resolvedPalette(for theme: ThemeDefinition) -> Palette {
+        overrides.applying(to: fileOverrides.applying(to: theme.defaultPalette))
+    }
+
+    private func fileColor(_ table: [String: Any], key: String) -> RGB? {
+        guard let value = table[key] else { return nil }
+        guard let hex = value as? String, let rgb = RGB(hex: hex) else {
+            Log.note("invalid color value '\(key)' in \(file) — ignoring")
+            return nil
+        }
+        return rgb
     }
 
     /// Watch the *file* fd: pywal rewrites colors.json in place (truncate+write,

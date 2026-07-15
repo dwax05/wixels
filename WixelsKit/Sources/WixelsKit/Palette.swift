@@ -51,3 +51,26 @@ public struct Palette: Equatable, Sendable {
         accents: (0..<16).map { _ in RGB(120, 120, 120) }
     )
 }
+
+/// Sparse user- or file-provided palette values. Missing values deliberately stay
+/// missing until a themed widget supplies its theme's default palette.
+public struct PaletteOverrides: Equatable, Sendable {
+    public var background: RGB?
+    public var foreground: RGB?
+    public var accents: [RGB?]
+
+    public init(background: RGB? = nil, foreground: RGB? = nil,
+                accents: [RGB?] = Array(repeating: nil, count: 16)) {
+        self.background = background
+        self.foreground = foreground
+        self.accents = Array(accents.prefix(16))
+        if self.accents.count < 16 {
+            self.accents += Array(repeating: nil, count: 16 - self.accents.count)
+        }
+    }
+
+    public func applying(to base: Palette) -> Palette {
+        Palette(background: background ?? base.background, foreground: foreground ?? base.foreground,
+                accents: (0..<16).map { accents[$0] ?? base.c($0) })
+    }
+}

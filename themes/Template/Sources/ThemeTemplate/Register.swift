@@ -6,5 +6,5 @@ import WixelsKit
 public func wixels_register(_ context: UnsafeMutableRawPointer) {
     let registrar = Unmanaged<Registrar>.fromOpaque(context).takeUnretainedValue()
     registrar.add(ThemeDefinition(manifest: .init(id: "template", name: "Theme Template"),
-        tokens: ThemeDefinition.macos.tokens))
+        tokens: ThemeDefinition.macos.tokens, defaultPalette: ThemeDefinition.macos.defaultPalette))
 }
