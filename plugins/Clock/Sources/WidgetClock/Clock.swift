@@ -18,9 +18,9 @@ struct PixelClock: ThemeableWixel {
             build: { _, _ in PixelClock() })
     }
     static let refresh: RefreshPolicy = .interval(1)
-    // interactive (no click action) only so it shares the frog's window level and
-    // can be ordered in front of it — the clock card hides the frog's body.
-    static let interactive = true
+    // The clock visually covers the frog but must remain click-through so the
+    // visible frog pixels receive their pop gesture. zBoost keeps this passive
+    // window above the frog without enabling mouse handling.
     static let px: CGFloat = 9
 
     // 3×5 pixel digit font (colon is 1-wide, drawn separately so it can blink)

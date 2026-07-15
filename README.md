@@ -42,30 +42,32 @@ For a packaged build, extract the ZIP and move `Wixels.app` to Applications. The
 personal-sharing build is ad-hoc signed, so macOS may ask you to right-click the app,
 choose **Open**, and confirm the first launch.
 
-If you are running from this repository, build the app and its bundled content with:
+If you are running from this repository, build the host and bundled extensions separately:
 
 ```sh
+swift build
 ./build-plugins.sh
-./.build/debug/wixels
+WIXELS_PLUGIN_ROOT="$PWD/build/debug" ./.build/debug/wixels
 ```
 
 Wixels starts in the foreground from a source build. Press `Ctrl-C` to stop it.
 
 On first launch, Wixels creates `~/.config/wixels/desktop.toml` and enables the
 bundled widgets. The widgets are behind your windows, so minimize or move a window
-aside to see them.
+aside to see them. The menu discovers every bundled or installed widget, including
+ones that are not yet in the configuration.
 
 ## The menu-bar menu
 
 Click the `w` icon in the menu bar to:
 
-- show or hide individual widgets for the current session;
+- enable or hide individual widgets persistently;
 - turn on **Edit Layout**, then drag widgets into place;
 - choose **Reset Layout** to restore each widget's default position; or
 - quit Wixels.
 
-Layout changes made by dragging are saved to `desktop.toml`. Menu-bar visibility
-toggles are temporary and return to the configuration on the next launch.
+Layout changes made by dragging and menu-bar visibility toggles are saved to
+`desktop.toml`.
 
 ## Customize your desktop
 
@@ -80,7 +82,9 @@ The smallest widget entry is:
 kind = "clock"
 ```
 
-Delete a widget entry to disable it. The order of entries controls the stacking order
+Omit `enabled` (or set it to `true`) to mount a widget. Set `enabled = false` to
+hide it while keeping its placement, theme, and options for later re-enabling.
+Delete a widget entry to return it to the unconfigured state. The order of entries controls the stacking order
 when widgets overlap. You can set a global theme or override it for one widget:
 
 ```toml
@@ -139,6 +143,12 @@ Third-party widgets go in `~/.config/wixels/plugins/`, and themes go in
 `~/.config/wixels/themes/`. Build them with the same Swift toolchain as Wixels. They
 run inside the app, so a broken extension can take down the host.
 
+Packaged extensions are installed in `Wixels.app/Contents/Resources/plugins` and
+`Wixels.app/Contents/Resources/themes`. At runtime Wixels searches those folders,
+then the two user folders above. It never scans the executable directory or SwiftPM
+build directories. `WIXELS_PLUGIN_ROOT` is only an explicit source-checkout staging
+override.
+
 ## Build a release package
 
 To create an Apple-silicon app and ZIP for personal sharing:
@@ -149,6 +159,12 @@ To create an Apple-silicon app and ZIP for personal sharing:
 
 The output is written to `dist/Wixels.app` and
 `dist/Wixels-0.1.0-arm64.zip`.
+
+`swift build` builds only the host. `./build-plugins.sh [debug|release]` builds and
+stages standalone widget and theme packages. The release packager bundles no
+extensions by default; set `WIXELS_BUNDLED_PLUGINS` and/or
+`WIXELS_BUNDLED_THEMES` to comma-separated package names when intentionally adding
+extensions to a package. Empty values are valid when you want a host-only app.
 
 ## Troubleshooting
 

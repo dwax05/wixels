@@ -6,10 +6,9 @@
 // host and plugin both link the one dynamic WixelsKit, the Registrar and WidgetSpec
 // types have a single runtime identity, so the call is safe.
 //
-// Search order: the running binary's own directory (build-plugins.sh installs the
-// built-in plugin dylibs next to the executable in .build/<config>/), then
-// ~/.config/wixels/plugins for user drop-ins. A plugin that fails to load is logged
-// and skipped, never fatal.
+// Search order is bundled app resources, then user drop-ins. A source checkout can
+// opt into an explicit staging root with WIXELS_PLUGIN_ROOT; production never scans
+// the executable or SwiftPM build directories.
 
 import Foundation
 import WixelsKit
@@ -18,27 +17,46 @@ enum PluginLoader {
     static func load(into registrar: Registrar) {
         var seen = Set<String>()
         for dir in searchDirs() {
-            guard let items = try? FileManager.default.contentsOfDirectory(atPath: dir) else { continue }
-            for file in items.sorted() where isLoadable(file) && seen.insert(file).inserted {
+            for file in loadableFiles(in: dir) where seen.insert(file).inserted {
                 loadOne(dir + "/" + file, into: registrar)
             }
         }
     }
 
-    /// Built-in plugins are named `libWidget*.dylib`; user drop-ins may be any
-    /// `.dylib`/`.bundle` — but we only auto-load the `Widget*` naming to avoid
-    /// dlopening unrelated libraries sitting in the build dir.
+    static func loadableFiles(in directory: String) -> [String] {
+        guard let items = try? FileManager.default.contentsOfDirectory(atPath: directory) else {
+            return []
+        }
+        return items.filter(isLoadable).sorted()
+    }
+
+    /// Only Wixels extension names are considered, avoiding unrelated libraries in
+    /// either the app bundle or a user extension directory.
     private static func isLoadable(_ file: String) -> Bool {
         ((file.hasPrefix("libWidget") || file.hasPrefix("libTheme")) && file.hasSuffix(".dylib"))
     }
 
     private static func searchDirs() -> [String] {
-        var dirs: [String] = []
-        if let exe = Bundle.main.executableURL?.resolvingSymlinksInPath()
-            .deletingLastPathComponent().path { dirs.append(exe) }
-        dirs.append(("~/.config/wixels/plugins" as NSString).expandingTildeInPath)
-        dirs.append(("~/.config/wixels/themes" as NSString).expandingTildeInPath)
-        return dirs
+        let root = ProcessInfo.processInfo.environment["WIXELS_PLUGIN_ROOT"]
+            .flatMap { $0.isEmpty ? nil : URL(fileURLWithPath: $0) }
+        return searchDirs(bundleResourceURL: Bundle.main.resourceURL,
+                          homeDirectory: FileManager.default.homeDirectoryForCurrentUser,
+                          developmentRoot: root)
+    }
+
+    // Kept injectable so path policy can be tested without changing process
+    // environment or depending on an app bundle on disk.
+    static func searchDirs(bundleResourceURL: URL?, homeDirectory: URL,
+                           developmentRoot: URL? = nil) -> [String] {
+        var dirs: [URL] = []
+        if let root = developmentRoot {
+            dirs += [root.appendingPathComponent("plugins"), root.appendingPathComponent("themes")]
+        } else if let resources = bundleResourceURL {
+            dirs += [resources.appendingPathComponent("plugins"), resources.appendingPathComponent("themes")]
+        }
+        let user = homeDirectory.appendingPathComponent(".config/wixels")
+        dirs += [user.appendingPathComponent("plugins"), user.appendingPathComponent("themes")]
+        return dirs.map(\.path)
     }
 
     private static func loadOne(_ path: String, into registrar: Registrar) {

@@ -18,8 +18,8 @@ extension Config {
     }
 
     static let defaultTOML = """
-    # wixels desktop layout. Each [[widget]] enables a widget by `kind`; delete a
-    # block to disable it. Placement fields are optional — omit them to use the
+    # wixels desktop layout. Each [[widget]] enables a widget by `kind`; set
+    # enabled = false to hide it while retaining its settings. Placement fields are optional — omit them to use the
     # widget's built-in default. Order = mount order = z-stacking among widgets that
     # share a window level (the frog is before the clock so the clock hides its body).
     #

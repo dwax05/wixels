@@ -82,10 +82,10 @@ by the package.
 
 ## Build and install
 
-Build the whole repository while developing:
+Build the standalone widget packages while developing:
 
 ```sh
-./build-plugins.sh
+./build-plugins.sh debug
 ```
 
 To build only your package:
@@ -94,8 +94,20 @@ To build only your package:
 swift build --package-path plugins/MyThing
 ```
 
-Copy the resulting `libWidgetMyThing.dylib` to
-`~/.config/wixels/plugins/`. Add the widget to the layout:
+The repository build stages the result under `build/debug/plugins`. To run the host
+from the checkout against that staging area:
+
+```sh
+swift build
+WIXELS_PLUGIN_ROOT="$PWD/build/debug" ./.build/debug/wixels
+```
+
+For a user install, copy `libWidgetMyThing.dylib` to `~/.config/wixels/plugins/`.
+Packaged widgets belong in `Wixels.app/Contents/Resources/plugins`; the app never
+loads libraries from its executable or SwiftPM build directories. The release
+packager includes only its explicit shipped-extension list; add a custom package to
+that list with `WIXELS_BUNDLED_PLUGINS=...` when intentionally distributing it. Add
+the widget to the layout:
 
 ```toml
 [[widget]]
