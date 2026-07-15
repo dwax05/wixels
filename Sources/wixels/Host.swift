@@ -394,8 +394,8 @@ final class WidgetHost {
     }
 
     /// Occlusion-aware pause: when a widget's window is fully covered, gate its
-    /// ticker off so the scheduler stops sampling it (SwiftUI already halts the
-    /// TimelineView animation for a non-visible window). Uncovering re-arms it.
+    /// ticker off so the scheduler stops sampling it. Render-layer animations
+    /// independently pause themselves while their owning window is occluded.
     private func observeOcclusion() {
         occlusionObserver = NotificationCenter.default.addObserver(
             forName: NSWindow.didChangeOcclusionStateNotification,
