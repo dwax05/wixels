@@ -42,12 +42,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.watcher = ConfigWatcher(path: Config.path) { [weak self] in self?.reload() }
     }
 
-    // Menu Quit / NSApplication.terminate path. Ctrl-C and SIGTERM are handled by
-    // the signal sources installed at startup below.
-    func applicationWillTerminate(_ note: Notification) {
-        ChildReaper.shared.terminateAll()
-    }
-
     /// Construct a host from the current config and mount every widget. Reads `[colors]`
     /// afresh so a config edit to colors/nowplaying takes effect on reload. Called at
     /// launch and again on every reload.
@@ -143,23 +137,6 @@ if CommandLine.arguments.contains("--config-tests") {
 } else if CommandLine.arguments.contains("--plugin-path-tests") {
     exit(runPluginLoaderPathTestSuite())
 } else {
-    // Ctrl-C (SIGINT) and `pkill -x wixels` (SIGTERM) bypass applicationWillTerminate,
-    // which would orphan the MediaRemoteAdapter perl stream. Catch both, reap children,
-    // then exit. Plain Dispatch closures only — no Swift Concurrency in a
-    // DispatchSource handler (Swift 6 aborts).
-    signal(SIGINT, SIG_IGN)
-    signal(SIGTERM, SIG_IGN)
-    let signalSources = [SIGINT, SIGTERM].map { sig -> DispatchSourceSignal in
-        let source = DispatchSource.makeSignalSource(signal: sig, queue: .main)
-        source.setEventHandler {
-            ChildReaper.shared.terminateAll()
-            exit(0)
-        }
-        source.resume()
-        return source
-    }
-    _ = signalSources
-
     let app = NSApplication.shared
     app.setActivationPolicy(.accessory)      // no dock icon, single process
     let delegate = AppDelegate()

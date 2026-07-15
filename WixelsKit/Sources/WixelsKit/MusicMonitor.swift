@@ -88,6 +88,7 @@ public actor MusicMonitor {
     private let adapterFramework: URL?
     private var cached: (snapshot: Snapshot, sampledAt: Date)?
     private var streamProcess: Process?
+    private var streamLifeline: Pipe?
     private var streamTask: Task<Void, Never>?
     private var didLogFailure = false
 
@@ -138,13 +139,25 @@ public actor MusicMonitor {
         else { return }
 
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/perl")
+        // The perl stream's only tie to the host is otherwise its stdout pipe, and
+        // perl only notices a closed pipe on its next write — with no track events
+        // it never writes, so a dead host (including SIGKILL/force-quit, which no
+        // handler can catch) would orphan it forever. Run it under a shell that
+        // holds a "lifeline" pipe from the host on stdin: any host exit closes the
+        // write end, `read` returns EOF, and the wrapper kills the adapter.
+        process.executableURL = URL(fileURLWithPath: "/bin/sh")
         // Full snapshots avoid diff-merging state in the host. A short debounce
         // collapses the burst of metadata fields most players emit on track change.
-        process.arguments = [script.path, framework.path, "stream", "--no-diff", "--debounce=200"]
+        process.arguments = ["-c", #"""
+            "$0" "$1" "$2" stream --no-diff --debounce=200 & CHILD=$!
+            read -r _ || true
+            kill "$CHILD" 2>/dev/null
+            """#, "/usr/bin/perl", script.path, framework.path]
         process.standardError = FileHandle.nullDevice
         let pipe = Pipe()
         process.standardOutput = pipe
+        let lifeline = Pipe()
+        process.standardInput = lifeline
         do {
             try process.run()
         } catch {
@@ -153,7 +166,7 @@ public actor MusicMonitor {
         }
 
         streamProcess = process
-        ChildReaper.shared.register(process)
+        streamLifeline = lifeline
         streamTask = Task { [weak self, pipe, weak process] in
             do {
                 for try await line in pipe.fileHandleForReading.bytes.lines {
@@ -178,7 +191,9 @@ public actor MusicMonitor {
 
     private func streamDidEnd(_ process: Process?) {
         guard streamProcess === process else { return }
-        if let process { ChildReaper.shared.unregister(process) }
+        // Releasing the lifeline lets the wrapper shell exit too.
+        try? streamLifeline?.fileHandleForWriting.close()
+        streamLifeline = nil
         streamProcess = nil
         streamTask = nil
     }
@@ -228,10 +243,10 @@ public actor MusicMonitor {
 
     deinit {
         streamTask?.cancel()
-        if let process = streamProcess {
-            ChildReaper.shared.unregister(process)
-            process.terminate()
-        }
+        // Closing the lifeline (not terminating the wrapper) is the one teardown
+        // path: the wrapper reaps the adapter, then exits on its own. Terminating
+        // the wrapper instead would orphan the adapter it supervises.
+        try? streamLifeline?.fileHandleForWriting.close()
     }
 
 }

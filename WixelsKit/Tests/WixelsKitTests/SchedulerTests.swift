@@ -160,8 +160,10 @@ private struct TestFailure: Error, CustomStringConvertible {
 @main
 struct TestMain {
     static func main() async throws {
+        // Re-executed as the throwaway "host" of the force-quit lifeline test.
+        if await StreamLifelineTests.runHostModeIfRequested() { return }
         try await SchedulerTests.run()
-        try await ChildReaperTests.run()
+        try await StreamLifelineTests.run()
     }
 }
 
