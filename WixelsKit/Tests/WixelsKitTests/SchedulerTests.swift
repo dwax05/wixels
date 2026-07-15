@@ -70,7 +70,7 @@ enum SchedulerTests {
     private static func overlappingPetReadsRemainValid() async throws {
         let source = PetSource(
             cpu: CPUSource(minInterval: 0),
-            music: MusicMonitor(cachePath: "/dev/null")
+            music: MusicMonitor()
         )
         let readings = await withTaskGroup(of: PetState.self, returning: [PetState].self) { group in
             for _ in 0..<8 { group.addTask { await source.read() } }

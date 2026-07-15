@@ -1,6 +1,6 @@
 // Paths — the one place the "env override > config value > built-in default" path
-// precedence lives. PaletteStore, MusicMonitor, the host Config, and file-backed
-// widgets (Quotes) all resolve their data file the same way; this keeps that ladder
+// precedence lives. PaletteStore, the host Config, and file-backed widgets (Quotes)
+// all resolve their data file the same way; this keeps that ladder
 // from being copy-pasted per source.
 
 import Foundation

@@ -27,10 +27,9 @@ extension Config {
     # anchors: topLeft topRight bottomLeft bottomRight center topCenter
     # A [widget.options] table passes per-widget settings (e.g. disk-snail path).
 
-    # App-global data files. Env vars WIXELS_COLORS / WIXELS_NOWPLAYING override these.
+    # App-global data files. WIXELS_COLORS overrides this palette path.
     [paths]
-    colors     = "~/.cache/wal/colors.json"        # pywal palette — recolours everything
-    nowplaying = "~/.cache/wixels/nowplaying.json" # music cache your publisher writes
+    colors = "~/.cache/wal/colors.json" # pywal palette — recolours everything
 
     [[widget]]
     kind = "sys"
