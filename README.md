@@ -14,7 +14,7 @@ Wixels is a native macOS app. It has no dock icon, runs from the menu bar, and u
 the desktop layer as its canvas.
 
 <p align="center">
-  <img src="docs/images/desktop.png" alt="Default MacOS-Style Desktop Widgets" width="200">
+  <img src="docs/images/desktop.png" alt="Default MacOS-Style Desktop Widgets">
 </p>
 
 ## Available extensions
