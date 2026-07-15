@@ -153,6 +153,7 @@ public actor MusicMonitor {
         }
 
         streamProcess = process
+        ChildReaper.shared.register(process)
         streamTask = Task { [weak self, pipe, weak process] in
             do {
                 for try await line in pipe.fileHandleForReading.bytes.lines {
@@ -177,6 +178,7 @@ public actor MusicMonitor {
 
     private func streamDidEnd(_ process: Process?) {
         guard streamProcess === process else { return }
+        if let process { ChildReaper.shared.unregister(process) }
         streamProcess = nil
         streamTask = nil
     }
@@ -226,7 +228,10 @@ public actor MusicMonitor {
 
     deinit {
         streamTask?.cancel()
-        streamProcess?.terminate()
+        if let process = streamProcess {
+            ChildReaper.shared.unregister(process)
+            process.terminate()
+        }
     }
 
 }

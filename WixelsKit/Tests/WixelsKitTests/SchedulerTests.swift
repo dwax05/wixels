@@ -161,6 +161,7 @@ private struct TestFailure: Error, CustomStringConvertible {
 struct TestMain {
     static func main() async throws {
         try await SchedulerTests.run()
+        try await ChildReaperTests.run()
     }
 }
 
