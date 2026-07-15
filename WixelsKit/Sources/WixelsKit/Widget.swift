@@ -68,7 +68,19 @@ public protocol WidgetTicker: AnyObject {
     /// False while the widget's window is fully occluded — the scheduler skips
     /// sampling it then (the battery rule: covered widgets stop sampling).
     var active: Bool { get set }
+    /// Whether the rendered view contains a real sample rather than its initial
+    /// placeholder. Hosts use this to retain a placement's fallback frame until
+    /// there is content worth measuring.
+    var hasSample: Bool { get }
+    /// Called on the main actor after a new sample has been published to SwiftUI.
+    func setContentUpdateHandler(_ handler: @escaping () -> Void)
     func tick() async
+}
+
+public extension WidgetTicker {
+    /// Preserves source compatibility for custom ticker implementations.
+    var hasSample: Bool { true }
+    func setContentUpdateHandler(_ handler: @escaping () -> Void) {}
 }
 
 /// A widget erased for the host: its ticker and its view share one model instance,
@@ -112,16 +124,19 @@ final class WidgetModel<W: Wixel>: ObservableObject, WidgetTicker {
     let widget: W
     @Published private(set) var sample: W.Sample?
     var active = true      // toggled by the host on window occlusion changes
+    private var contentUpdateHandler: (() -> Void)?
 
     init(_ widget: W) { self.widget = widget }
 
     var kind: String { W.kind }
     var refresh: RefreshPolicy { W.refresh }
     var interactive: Bool { W.interactive }
+    var hasSample: Bool { sample != nil }
+    func setContentUpdateHandler(_ handler: @escaping () -> Void) { contentUpdateHandler = handler }
 
     func tick() async {
         let s = await widget.sample()
-        if s != sample { sample = s }
+        if s != sample { sample = s; contentUpdateHandler?() }
     }
 
     @ViewBuilder func view(_ palette: Palette) -> some View {
@@ -154,11 +169,17 @@ final class ThemedWidgetModel<W: ThemeableWixel>: ObservableObject, WidgetTicker
     let theme: ThemeDefinition
     @Published private(set) var sample: W.Sample?
     var active = true
+    private var contentUpdateHandler: (() -> Void)?
     init(_ widget: W, theme: ThemeDefinition) { self.widget = widget; self.theme = theme }
     var kind: String { W.kind }
     var refresh: RefreshPolicy { W.refresh }
     var interactive: Bool { W.interactive }
-    func tick() async { let next = await widget.sample(); if next != sample { sample = next } }
+    var hasSample: Bool { sample != nil }
+    func setContentUpdateHandler(_ handler: @escaping () -> Void) { contentUpdateHandler = handler }
+    func tick() async {
+        let next = await widget.sample()
+        if next != sample { sample = next; contentUpdateHandler?() }
+    }
     func view(_ palette: Palette) -> AnyView {
         guard let sample else { return AnyView(Color.clear) }
         return AnyView(widget.render(sample, ThemeContext(definition: theme,

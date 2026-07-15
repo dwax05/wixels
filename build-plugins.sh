@@ -94,6 +94,14 @@ else
     fi
 fi
 
+# Widget dylibs link the same dynamic WixelsKit as the host. Refresh the default
+# host before validation so a newly added shared-kit API cannot be tested against
+# yesterday's release binary. An explicit WIXELS_HOST remains caller-controlled.
+if [ -n "$SUITE" ] && [ -z "${WIXELS_HOST:-}" ]; then
+    echo "==> refreshing host for plugin ABI validation"
+    swift build -c "$CONFIG"
+fi
+
 HOST="${WIXELS_HOST:-$ROOT/.build/$CONFIG/wixels}"
 if [ -x "$HOST" ] && [ -n "$SUITE" ]; then
     echo "==> validating staged extensions with $HOST"

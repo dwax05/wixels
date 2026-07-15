@@ -22,5 +22,9 @@
 	<true/>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>Wixels uses Apple Events to control Spotify playback when you use its media controls.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Wixels shows your upcoming calendar events when you enable the Clock widget.</string>
+	<key>NSRemindersFullAccessUsageDescription</key>
+	<string>Wixels shows your due reminders when you enable the Reminders widget.</string>
 </dict>
 </plist>

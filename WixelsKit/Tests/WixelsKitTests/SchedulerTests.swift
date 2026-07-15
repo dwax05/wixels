@@ -10,6 +10,8 @@ enum SchedulerTests {
         try await refreshOnceOnlyTicksActiveIdleStaticWidgets()
         try await overlappingPetReadsRemainValid()
         try universalThemeRegistryResolvesAndPreservesPlacement()
+        try previewRegistryUsesFixturesAndKeepsLegacySpecsCompatible()
+        try connectivityDoesNotTreatHiddenSSIDAsOffline()
         try paletteLayersResolvePerTheme()
         print("PASS scheduler suite")
     }
@@ -132,6 +134,29 @@ enum SchedulerTests {
                   "partial palettes fall back per value to each widget theme")
     }
 
+    private static func previewRegistryUsesFixturesAndKeepsLegacySpecsCompatible() throws {
+        let registrar = Registrar()
+        registrar.add(TestThemeable.spec())
+        registrar.add(LegacyThemeable.spec())
+        let previews = registrar.registeredPreviews(services: Services(), themeID: "macos")
+        try check(previews.count == 1 && previews.first?.kind == "test" && previews.first?.name == "Fixture",
+                  "preview registration enumerates deterministic themed fixtures")
+        try check(!previews.contains { $0.kind == "legacy" },
+                  "legacy themed specs remain source-compatible with no previews")
+    }
+
+    private static func connectivityDoesNotTreatHiddenSSIDAsOffline() throws {
+        try check(ConnectivitySource.interpret(reachable: true, ssid: nil, hasWiFiInterface: true)
+                    == .init(connected: true, label: "Online"),
+                  "reachable Wi-Fi without an SSID uses a compact online state")
+        try check(ConnectivitySource.interpret(reachable: true, ssid: nil, hasWiFiInterface: false)
+                    == .init(connected: true, label: "Online"),
+                  "reachable non-Wi-Fi network is online")
+        try check(ConnectivitySource.interpret(reachable: false, ssid: "Studio", hasWiFiInterface: true)
+                    == .init(connected: false, label: "Offline"),
+                  "unreachable network remains offline")
+    }
+
     private static func waitUntil(
         timeout: Duration = .seconds(1),
         condition: @escaping @MainActor () -> Bool
@@ -157,9 +182,22 @@ private struct TestThemeable: ThemeableWixel {
     static func spec() -> ThemedWidgetSpec {
         ThemedWidgetSpec(widget: Self.self,
             defaultPlacement: .init(anchor: .center, size: .init(width: 10, height: 10)),
+            previews: [.init("Fixture", sample: 42)],
             build: { _, _ in Self() })
     }
     func sample() async -> Int { 1 }
+    func render(_ sample: Int, _ theme: ThemeContext) -> some View { Text("\(sample)") }
+}
+
+private struct LegacyThemeable: ThemeableWixel {
+    static let kind = "legacy"
+    static let refresh: RefreshPolicy = .idleStatic
+    static func spec() -> ThemedWidgetSpec {
+        ThemedWidgetSpec(widget: Self.self,
+            defaultPlacement: .init(anchor: .center, size: .init(width: 10, height: 10)),
+            build: { _, _ in Self() })
+    }
+    func sample() async -> Int { 0 }
     func render(_ sample: Int, _ theme: ThemeContext) -> some View { Text("\(sample)") }
 }
 

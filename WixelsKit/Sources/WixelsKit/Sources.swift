@@ -6,10 +6,135 @@ import Foundation
 import IOKit
 import IOKit.ps
 import CoreWLAN
+import EventKit
+import SystemConfiguration
+
+// MARK: - Calendar and reminders
+
+public enum PersonalDataAuthorization: Equatable, Sendable {
+    case notDetermined, denied, restricted, authorized
+}
+
+public struct AgendaItem: Equatable, Sendable, Identifiable {
+    public let id: String; public let title: String; public let date: Date
+    public init(id: String = UUID().uuidString, title: String, date: Date) {
+        self.id = id; self.title = title; self.date = date
+    }
+}
+
+public struct AgendaSnapshot: Equatable, Sendable {
+    public let authorization: PersonalDataAuthorization; public let items: [AgendaItem]
+    public init(authorization: PersonalDataAuthorization, items: [AgendaItem] = []) {
+        self.authorization = authorization; self.items = items
+    }
+}
+
+/// EventKit is touched only by widgets that opt into these sources. The host never
+/// prompts at launch: the first enabled calendar/reminders widget initiates access.
+public final class CalendarSource: DataSource, @unchecked Sendable {
+    private let store = EKEventStore()
+    public init() {}
+    public func read() async -> AgendaSnapshot {
+        let status = EKEventStore.authorizationStatus(for: .event)
+        if status == .notDetermined {
+            do { _ = try await store.requestFullAccessToEvents() }
+            catch { Log.note("calendar permission request failed: \(error.localizedDescription)") }
+        }
+        let resolved = Self.map(EKEventStore.authorizationStatus(for: .event))
+        guard resolved == .authorized else { return .init(authorization: resolved) }
+        let now = Date(), end = Calendar.current.date(byAdding: .day, value: 1, to: now)!
+        let events = store.events(matching: store.predicateForEvents(withStart: now, end: end, calendars: nil))
+            .sorted { $0.startDate < $1.startDate }.prefix(3)
+            .map { AgendaItem(id: $0.eventIdentifier, title: $0.title ?? "Untitled", date: $0.startDate) }
+        return .init(authorization: resolved, items: Array(events))
+    }
+    static func map(_ status: EKAuthorizationStatus) -> PersonalDataAuthorization {
+        switch status { case .authorized, .fullAccess, .writeOnly: .authorized
+        case .denied: .denied; case .restricted: .restricted; case .notDetermined: .notDetermined
+        @unknown default: .denied }
+    }
+}
+
+public final class RemindersSource: DataSource, @unchecked Sendable {
+    public init() {}
+    public func read() async -> AgendaSnapshot {
+        // EventKit stores created before a TCC change can retain the old access
+        // view. Build this lightweight query store per read so a grant made in
+        // System Settings is observed without restarting Wixels.
+        let store = EKEventStore()
+        let status = EKEventStore.authorizationStatus(for: .reminder)
+        if status == .notDetermined {
+            do { _ = try await store.requestFullAccessToReminders() }
+            catch { Log.note("reminders permission request failed: \(error.localizedDescription)") }
+        }
+        let resolved = CalendarSource.map(EKEventStore.authorizationStatus(for: .reminder))
+        guard resolved == .authorized else { return .init(authorization: resolved) }
+        let predicate = store.predicateForIncompleteReminders(withDueDateStarting: nil, ending: nil, calendars: nil)
+        let items: [AgendaItem] = await withCheckedContinuation { continuation in
+            store.fetchReminders(matching: predicate) { reminders in
+                let items = (reminders ?? []).sorted {
+                    ($0.dueDateComponents?.date ?? .distantFuture) < ($1.dueDateComponents?.date ?? .distantFuture)
+                }.prefix(4).map { AgendaItem(id: $0.calendarItemIdentifier, title: $0.title ?? "Untitled",
+                    date: $0.dueDateComponents?.date ?? .distantFuture) }
+                continuation.resume(returning: Array(items))
+            }
+        }
+        return .init(authorization: resolved, items: items)
+    }
+
+    /// Complete a reminder from the desktop card. A new store deliberately mirrors
+    /// `read()` so actions also observe permissions granted during this launch.
+    public func complete(id: String) async -> Bool {
+        guard CalendarSource.map(EKEventStore.authorizationStatus(for: .reminder)) == .authorized else {
+            return false
+        }
+        let store = EKEventStore()
+        guard let reminder = store.calendarItem(withIdentifier: id) as? EKReminder else { return false }
+        reminder.isCompleted = true
+        do {
+            try store.save(reminder, commit: true)
+            return true
+        } catch {
+            Log.note("could not complete reminder: \(error.localizedDescription)")
+            return false
+        }
+    }
+}
 
 public struct ClockSnapshot: Equatable, Sendable {
     public let date: Date
     public init(date: Date = Date()) { self.date = date }
+}
+
+public struct ConnectivityInfo: Equatable, Sendable {
+    public let connected: Bool; public let label: String
+    public init(connected: Bool, label: String) { self.connected = connected; self.label = label }
+}
+
+public struct ConnectivitySource: DataSource {
+    public init() {}
+    public func read() async -> ConnectivityInfo {
+        let wifi = CWWiFiClient.shared().interface()
+        return Self.interpret(reachable: Self.isReachable(), ssid: wifi?.ssid(),
+                              hasWiFiInterface: wifi != nil)
+    }
+
+    /// SSIDs are protected by Location Services on current macOS releases. A nil
+    /// SSID means the name is unavailable, not that the computer is offline.
+    static func interpret(reachable: Bool, ssid: String?, hasWiFiInterface: Bool) -> ConnectivityInfo {
+        guard reachable else { return .init(connected: false, label: "Offline") }
+        if let ssid, !ssid.isEmpty { return .init(connected: true, label: ssid) }
+        // The row already carries a Wi-Fi symbol and a "Network" label. Keep the
+        // privacy-safe fallback compact enough to remain a single status value.
+        return .init(connected: true, label: "Online")
+    }
+
+    private static func isReachable() -> Bool {
+        guard let ref = SCNetworkReachabilityCreateWithName(nil, "1.1.1.1") else { return false }
+        var flags = SCNetworkReachabilityFlags()
+        guard SCNetworkReachabilityGetFlags(ref, &flags) else { return false }
+        return flags.contains(.reachable) && !flags.contains(.connectionRequired)
+    }
 }
 
 // MARK: - Interfaces

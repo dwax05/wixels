@@ -5,7 +5,9 @@ import WixelsKit
 @MainActor
 private final class InteractionProbeState: ObservableObject {
     @Published private(set) var clicks = 0
+    @Published private(set) var samples = 0
     func click() { clicks += 1 }
+    func sampled() { samples += 1 }
 }
 
 private struct InteractionProbe: Wixel, @unchecked Sendable {
@@ -19,11 +21,15 @@ private struct InteractionProbe: Wixel, @unchecked Sendable {
         fatalError("interaction probes are mounted directly by the internal test suite")
     }
 
-    func sample() async -> Int { 0 }
+    func sample() async -> Int {
+        await MainActor.run { state.sampled() }
+        return 0
+    }
 
     @MainActor
     func render(_ sample: Int, _ palette: Palette) -> some View {
         Color(red: 0.15, green: 0.35, blue: 0.75)
+            .frame(width: 64, height: 40)
             .contentShape(Rectangle())
             .onTapGesture { state.click() }
     }
@@ -50,6 +56,16 @@ func runInteractionTestSuite() -> Int32 {
     let repetitions = interactionTestRepetitions()
     var session = makeInteractionTestSession()
     pumpInteractionEvents()
+
+    let samplesBeforeActivation = session.probes.map(\.samples)
+    NotificationCenter.default.post(name: NSApplication.didBecomeActiveNotification, object: NSApp)
+    pumpInteractionEvents()
+    guard zip(session.probes.map(\.samples), samplesBeforeActivation).allSatisfy({ $0 > $1 }) else {
+        print("FAIL application activation did not refresh mounted widgets")
+        return 1
+    }
+
+    guard verifyContentSizedFrame(session.host) else { return 1 }
 
     guard verifyClick(&session, phase: "launch") else { return 1 }
 
@@ -128,7 +144,7 @@ private func makeInteractionTestSession() -> InteractionTestSession {
     let probeZBoost = NSWindow.Level.floating.rawValue - desktopIconLevel
     let placements = [
         Placement(anchor: .topLeft, offset: .init(width: 40, height: -120),
-                  size: .init(width: 96, height: 64), zBoost: probeZBoost),
+                  size: .init(width: 96, height: 64), zBoost: probeZBoost, sizing: .fitContent),
         Placement(anchor: .topLeft, offset: .init(width: 160, height: -120),
                   size: .init(width: 96, height: 64), zBoost: probeZBoost),
     ]
@@ -138,6 +154,23 @@ private func makeInteractionTestSession() -> InteractionTestSession {
     }
     host.run()
     return InteractionTestSession(host: host, probes: probes)
+}
+
+/// Layout mode uses the actual window for its border and drag hit target. This
+/// probe therefore verifies the first window has shrunk to content while its
+/// fixed sibling retains the declared frame; the later CGEvent drag exercises
+/// that measured frame rather than a separate overlay.
+@MainActor
+private func verifyContentSizedFrame(_ host: WidgetHost) -> Bool {
+    let frames = host.layoutSnapshot().sorted { $0.configIndex < $1.configIndex }
+    guard frames.count == 2,
+          frames[0].frame.size == .init(width: 64, height: 40),
+          frames[1].frame.size == .init(width: 96, height: 64) else {
+        print("FAIL fit-content interaction frame: \(frames.map { NSStringFromRect($0.frame) })")
+        return false
+    }
+    print("PASS fit-content interaction frame uses rendered bounds")
+    return true
 }
 
 @MainActor

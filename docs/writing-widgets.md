@@ -23,7 +23,8 @@ widget, not just an empty scaffold.
 
 ## The three pieces
 
-The main widget type conforms to `Wixel`:
+The main widget type conforms to `Wixel`. Suite widgets that should work with any
+installed theme instead conform to `ThemeableWixel` and use `ThemedWidgetSpec`.
 
 ```swift
 struct MyThing: Wixel {
@@ -56,6 +57,15 @@ struct MyThing: Wixel {
 
 `spec()` registers the widget and declares its default size and position. `sample()`
 gets data off the main actor. `render` turns the latest sample into SwiftUI content.
+
+Placements are `.fixed` by default: `size` is the permanent window size, which
+preserves compatibility with existing plugins. First-party widgets normally opt
+into `sizing: .fitContent`; then `size` is only the nonzero fallback used before
+the first render, and the host resizes the real window to the rendered content.
+The configured anchor controls how a later content-size change grows: top/bottom
+anchors preserve that vertical edge, left/right anchors preserve that horizontal
+edge, and center anchors remain centered. Do not use alignment expansion to pad a
+fit-content widget—the window is already its visible boundary.
 
 Keep `render` deterministic: it should draw from its arguments and avoid I/O or
 scheduled work. Put data fetching in `sample()`. Wixels supplies scheduling, desktop
@@ -149,3 +159,19 @@ stable cross-version ABI, and the plugin shares WixelsKit types with the host.
 
 Plugins run in Wixels' process. Treat a plugin like trusted local code: a crash or
 fatal error in a plugin can terminate Wixels.
+
+## Native suite conventions
+
+The first-party `Macos` suite keeps one package per widget beneath
+`plugins/Macos`. Use the small semantic views from WixelsKit—`NativeCard`,
+`NativeHeader`, `NativeMetric`, `NativeStatusRow`, and `NativeStateView`—for the
+standard native card language. They resolve colors, typography, materials, spacing,
+and accessibility from `ThemeContext`; custom SwiftUI composition remains welcome
+where it makes a widget clearer.
+
+Register deterministic fixtures with the optional `previews:` argument to
+`ThemedWidgetSpec`. A preview carries a named sample and is rendered by the exact
+same `render` method as production, so it must not need network, EventKit, or other
+machine state. Run a staged suite with `WIXELS_WIDGET_SUITE=Macos
+./build-plugins.sh debug`, then open the developer-only gallery with
+`WIXELS_PLUGIN_ROOT="$PWD/build/debug" ./.build/debug/wixels --gallery`.
