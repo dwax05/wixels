@@ -85,16 +85,17 @@ not notarized, so Gatekeeper blocks the first launch:
 
 The host intentionally contains no widgets. Extract the matching extension pack and
 follow its `INSTALL.md`: copy its `plugins/` files to `~/.config/wixels/plugins/` and
-`themes/` files to `~/.config/wixels/themes/`, then clear the download quarantine so
-Gatekeeper does not block the dylibs when Wixels loads them:
+`themes/` files to `~/.config/wixels/themes/`, then restart Wixels. Because the pack
+was downloaded, macOS quarantines the copied files; on the next launch Wixels asks
+for permission to remove the quarantine and loads the widgets immediately. If you
+decline, or on Wixels 0.1.0, clear it manually and restart:
 
 ```sh
 xattr -dr com.apple.quarantine ~/.config/wixels
 ```
 
-Restart Wixels afterwards. Until that restart, the menu says that no widgets are
-installed; if widgets are still missing after it, the quarantine step above is the
-usual cause.
+Until extensions load, the menu says that no widgets are installed; if widgets are
+still missing after a restart, quarantine is the usual cause.
 
 To uninstall, quit Wixels, delete the app, and optionally remove
 `~/.config/wixels/plugins/libWidget*.dylib`,
@@ -233,21 +234,21 @@ override.
 To create an Apple-silicon app and ZIP for personal sharing:
 
 ```sh
-./package-app.sh 0.1.0
+./package-app.sh 0.1.1
 ```
 
 The output is written to `dist/Wixels.app` and
-`dist/Wixels-0.1.0-arm64.zip`.
+`dist/Wixels-0.1.1-arm64.zip`.
 
 Build the matching public extension asset separately:
 
 ```sh
-./package-extension-pack.sh 0.1.0
+./package-extension-pack.sh 0.1.1
 ```
 
-This writes `dist/Wixels-Cynaberii-0.1.0/` and
-`dist/Wixels-Cynaberii-0.1.0-arm64.zip`. Release both ZIPs together. See
-[`docs/release-v0.1.0.md`](docs/release-v0.1.0.md) for the release checklist and
+This writes `dist/Wixels-Cynaberii-0.1.1/` and
+`dist/Wixels-Cynaberii-0.1.1-arm64.zip`. Release both ZIPs together. See
+[`docs/release-v0.1.1.md`](docs/release-v0.1.1.md) for the release checklist and
 copy-ready notes.
 
 `swift build` builds only the host. Widget implementations live in explicit suites:
@@ -260,7 +261,7 @@ corresponding theme packages.
 
 ```sh
 WIXELS_WIDGET_SUITE=Cynaberii ./build-plugins.sh debug
-WIXELS_BUNDLED_WIDGET_SUITE=Cynaberii ./package-app.sh 0.1.0
+WIXELS_BUNDLED_WIDGET_SUITE=Cynaberii ./package-app.sh 0.1.1
 ```
 
 The release packager bundles no extensions by default. It never loads or packages

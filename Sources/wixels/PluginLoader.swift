@@ -14,11 +14,13 @@ import Foundation
 import WixelsKit
 
 enum PluginLoader {
-    static func load(into registrar: Registrar) {
+    static func load(into registrar: Registrar, excluding excluded: Set<String> = []) {
         var seen = Set<String>()
         for dir in searchDirs() {
             for file in loadableFiles(in: dir) where seen.insert(file).inserted {
-                loadOne(dir + "/" + file, into: registrar)
+                let path = dir + "/" + file
+                guard !excluded.contains(path) else { continue }
+                loadOne(path, into: registrar)
             }
         }
     }

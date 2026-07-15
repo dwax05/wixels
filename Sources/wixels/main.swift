@@ -26,7 +26,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ note: Notification) {
         Config.writeDefaultIfMissing()
-        PluginLoader.load(into: registrar)
+        // Downloaded extension files are quarantined; ask once and clear before any
+        // dlopen so approved widgets load in this launch without a restart.
+        let excluded = Quarantine.resolveUserExtensions()
+        PluginLoader.load(into: registrar, excluding: excluded)
         if registrar.specs.isEmpty && registrar.themedSpecs.isEmpty {
             Log.note("no widgets installed — install the matching Cynaberii extension pack in ~/.config/wixels, then restart")
         }

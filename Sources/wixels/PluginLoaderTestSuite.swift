@@ -49,11 +49,26 @@ func runPluginLoaderPathTestSuite() -> Int32 {
             print("FAIL plugin loader duplicate suppression")
             return 1
         }
+        let quarantined = first.appendingPathComponent("libWidgetZ.dylib").path
+        guard setxattr(quarantined, "com.apple.quarantine", "0083;test;wixels;", 17, 0, 0) == 0 else {
+            print("FAIL quarantine fixture: setxattr")
+            return 1
+        }
+        let flagged = Quarantine.flaggedExtensions(in: [first.path, second.path])
+        guard flagged == [quarantined] else {
+            print("FAIL quarantine detection: \(flagged)")
+            return 1
+        }
+        guard Quarantine.strip(flagged).isEmpty, !Quarantine.isFlagged(quarantined),
+              Quarantine.flaggedExtensions(in: [first.path, second.path]).isEmpty else {
+            print("FAIL quarantine strip")
+            return 1
+        }
     } catch {
         print("FAIL plugin loader fixture: \(error)")
         return 1
     }
     try? FileManager.default.removeItem(at: temp)
-    print("PASS plugin loader resource, user, and development paths")
+    print("PASS plugin loader resource, user, and development paths + quarantine handling")
     return 0
 }

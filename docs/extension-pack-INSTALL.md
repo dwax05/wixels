@@ -7,12 +7,12 @@ the Cynaberii theme; it is not a standalone app.
 2. Extract `Wixels-Cynaberii-X.Y.Z-arm64.zip`.
 3. Copy the contents of its `plugins/` folder to `~/.config/wixels/plugins/` and its
    `themes/` folder to `~/.config/wixels/themes/`. Create those folders if needed.
-4. Clear the download quarantine on the copied files. The pack is ad-hoc signed and
-   not notarized, so Gatekeeper otherwise blocks Wixels from loading the dylibs and
-   the widgets stay missing.
-5. Start Wixels again. Extensions load only at app launch.
+4. Start Wixels again. Extensions load only at app launch. Because this pack was
+   downloaded, macOS quarantines the copied files; Wixels detects that and asks for
+   permission to remove the quarantine, then loads the widgets immediately.
 
-For example, from the extracted folder:
+If you decline that prompt, or run Wixels 0.1.0 (which has no prompt), clear the
+quarantine manually and restart Wixels. For example, from the extracted folder:
 
 ```sh
 mkdir -p ~/.config/wixels/plugins ~/.config/wixels/themes
