@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Build and package an Apple-silicon Wixels.app for personal distribution.
-# Usage: WIXELS_BUNDLED_WIDGET_SUITE=Cynaberii ./package-app.sh X.Y.Z
+# Usage: ./package-app.sh X.Y.Z
+# Set WIXELS_BUNDLED_WIDGET_SUITE only for private all-in-one builds; public
+# releases use the separate package-extension-pack.sh archive instead.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"

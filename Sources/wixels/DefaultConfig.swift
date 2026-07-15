@@ -26,6 +26,10 @@ extension Config {
     # Placement fields:  anchor  offset=[x,y]  size=[w,h]  zBoost  align
     # anchors: topLeft topRight bottomLeft bottomRight center topCenter
     # A [widget.options] table passes per-widget settings (e.g. disk-snail path).
+    #
+    # This host-only beta does not include widgets. Install the matching
+    # Wixels-Cynaberii extension pack into ~/.config/wixels/, then restart Wixels.
+    # Until then, the entries below are harmless and appear as unavailable in logs.
 
     # Optional palette. WIXELS_COLORS replaces only `file`; individual values below
     # always win. Omit any value to use the pywal file, then the selected theme default.

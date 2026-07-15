@@ -1,0 +1,41 @@
+name: Public beta feedback
+description: Report a Wixels v0.1.0 beta bug or usability problem
+title: "[beta]: "
+labels: [beta]
+body:
+  - type: markdown
+    attributes:
+      value: "Thanks for testing. Remove personal data from diagnostics and config excerpts."
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version and hardware
+      placeholder: "macOS 14.6, MacBook Air M2"
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Wixels and extension-pack versions
+      placeholder: "Wixels 0.1.0; Cynaberii pack 0.1.0 (or not installed)"
+    validations:
+      required: true
+  - type: textarea
+    id: widgets
+    attributes:
+      label: Widget and config excerpt
+      description: Include the affected widget kind and a minimal redacted desktop.toml excerpt.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: "1. ...\n2. ...\n3. ..."
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Relevant `wixels:` diagnostics
+      description: Paste relevant log lines, with secrets and personal paths removed.

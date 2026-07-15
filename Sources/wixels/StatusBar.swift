@@ -32,7 +32,7 @@ final class StatusBarController: NSObject, NSMenuDelegate {
         menu.removeAllItems()
         let infos = host.widgetInfos()
         if infos.isEmpty {
-            let empty = NSMenuItem(title: "No plugins loaded", action: nil, keyEquivalent: "")
+            let empty = NSMenuItem(title: "No widgets installed — install the Cynaberii extension pack, then restart", action: nil, keyEquivalent: "")
             empty.isEnabled = false
             menu.addItem(empty)
         }

@@ -27,6 +27,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ note: Notification) {
         Config.writeDefaultIfMissing()
         PluginLoader.load(into: registrar)
+        if registrar.specs.isEmpty && registrar.themedSpecs.isEmpty {
+            Log.note("no widgets installed — install the matching Cynaberii extension pack in ~/.config/wixels, then restart")
+        }
 
         buildSession()
         self.statusBar = StatusBarController(host: host) { [weak self] info in

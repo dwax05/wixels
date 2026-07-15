@@ -37,11 +37,24 @@ The repository also includes two themes:
 - Apple silicon for the packaged app
 - Swift 6.2 when building from source
 
-## Install and run
+## Public beta install and run
 
-For a packaged build, extract the ZIP and move `Wixels.app` to Applications. The
-personal-sharing build is ad-hoc signed, so macOS may ask you to right-click the app,
-choose **Open**, and confirm the first launch.
+Wixels is a public beta: there are **no automatic updates**. Each GitHub release has
+two matching Apple-silicon assets: `Wixels-X.Y.Z-arm64.zip` (the host app) and
+`Wixels-Cynaberii-X.Y.Z-arm64.zip` (the widgets and theme). Always replace both with
+assets from the same release when upgrading.
+
+Extract the host ZIP and move `Wixels.app` to Applications. It is ad-hoc signed, so
+macOS may ask you to right-click the app, choose **Open**, and confirm the first
+launch. The host intentionally contains no widgets. Extract the matching extension
+pack and follow its `INSTALL.md`: copy its `plugins/` files to
+`~/.config/wixels/plugins/` and `themes/` files to `~/.config/wixels/themes/`, then
+restart Wixels. Until that restart, the menu says that no widgets are installed.
+
+To uninstall, quit Wixels, delete the app, and optionally remove
+`~/.config/wixels/plugins/libWidget*.dylib`,
+`~/.config/wixels/themes/libThemeCynaberii.dylib`, and `~/.config/wixels/desktop.toml`.
+Please report beta feedback and bugs through [GitHub Issues](https://github.com/dwax05/wixels/issues).
 
 If you are running from this repository, build the host and optional extensions separately:
 
@@ -53,10 +66,11 @@ WIXELS_PLUGIN_ROOT="$PWD/build/debug" ./.build/debug/wixels
 
 Wixels starts in the foreground from a source build. Press `Ctrl-C` to stop it.
 
-On first launch, Wixels creates `~/.config/wixels/desktop.toml`. Packaged builds do
-not include extensions by default; install user extensions or explicitly select
-extensions when creating a package. The menu shows only loaded, configured widgets.
-The widgets are behind your windows, so minimize or move a window aside to see them.
+On first launch, Wixels creates `~/.config/wixels/desktop.toml`. The public host-only
+build's default file lists the Cynaberii widget layout before the extensions are
+installed; this is expected and becomes active after installing the matching pack and
+restarting. The menu shows only loaded, configured widgets. The widgets are behind
+your windows, so minimize or move a window aside to see them.
 
 ## The menu-bar menu
 
@@ -180,6 +194,17 @@ To create an Apple-silicon app and ZIP for personal sharing:
 The output is written to `dist/Wixels.app` and
 `dist/Wixels-0.1.0-arm64.zip`.
 
+Build the matching public extension asset separately:
+
+```sh
+./package-extension-pack.sh 0.1.0
+```
+
+This writes `dist/Wixels-Cynaberii-0.1.0/` and
+`dist/Wixels-Cynaberii-0.1.0-arm64.zip`. Release both ZIPs together. See
+[`docs/release-v0.1.0.md`](docs/release-v0.1.0.md) for the release checklist and
+copy-ready notes.
+
 `swift build` builds only the host. Widget implementations live in explicit suites:
 the current pixel-art `Cynaberii` suite is under `plugins/Cynaberii/`, while a future
 macOS suite may live under `plugins/Macos/`. Both share WixelsKit contracts, but only
@@ -208,3 +233,12 @@ the bundled MediaRemote adapter and supports apps that publish system now-playin
 metadata, such as Music, Spotify, and compatible browsers. If macOS denies the private
 MediaRemote interface after an OS update, the widgets show their idle state and Wixels
 logs one diagnostic to stderr.
+
+## Privacy and beta limitations
+
+Wixels has no telemetry. The Weather widget makes network requests: it uses your
+IP-derived location through `ipinfo.io`, then contacts its configured weather
+provider. NowPlaying, Poster, and Pet depend on Apple's unsupported/private
+MediaRemote interface, so macOS updates can make them degrade to an idle state.
+Extensions are trusted code loaded inside Wixels; install them only from sources you
+trust. Intel Macs and macOS versions before 14 are unsupported by the release ZIPs.
