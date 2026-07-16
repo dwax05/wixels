@@ -62,6 +62,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusBar: StatusBarController!
     private var watcher: ConfigWatcher?
     private var layoutWatcher: ConfigWatcher?
+    // A directory fd only reports entry create/rename/delete; in-place edits of an
+    // existing layout file need their own file watcher per mounted group.
+    private var layoutFileWatchers: [String: ConfigWatcher] = [:]
     private var gallery: PreviewGalleryController?
 
     func applicationDidFinishLaunching(_ note: Notification) {
@@ -111,15 +114,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let host = WidgetHost(
             palette: PaletteStore(colorsPath: cfg.colors.file, overrides: cfg.colors.overrides),
             menuEntries: menuEntries,
-            // Suppress the file event our own drag-save write would otherwise raise.
+            // Suppress the file events our own drag-save write would otherwise raise.
             placementWriter: { [weak self] writes in
-                self?.watcher?.ignoringWrites {
-                    let scoped = writes.map { write in
-                        LayoutWrite(group: write.group, records: write.records,
-                                    memberIndexes: Set(groupsByIndex.compactMap { $0.value == write.group ? $0.key : nil }))
-                    }
-                    self?.layoutWatcher?.ignoringWrites { Config.writeLayouts(scoped) }
+                guard let self else { return }
+                self.watcher?.suppress()
+                self.layoutWatcher?.suppress()
+                for fileWatcher in self.layoutFileWatchers.values { fileWatcher.suppress() }
+                let scoped = writes.map { write in
+                    LayoutWrite(group: write.group, records: write.records,
+                                memberIndexes: Set(groupsByIndex.compactMap { $0.value == write.group ? $0.key : nil }))
                 }
+                Config.writeLayouts(scoped)
             }
         )
 
@@ -155,6 +160,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         host.run()
         self.host = host
+        rebuildLayoutFileWatchers(
+            groups: Set(cfg.entries.filter(\.enabled).compactMap { groupsByIndex[$0.sourceIndex] }))
+    }
+
+    /// One watcher per mounted group's layout file, so in-place edits reload (the
+    /// directory watcher only sees entries appear/disappear). The parent-directory
+    /// fallback inside ConfigWatcher covers files that don't exist yet.
+    private func rebuildLayoutFileWatchers(groups: Set<String>) {
+        for (group, fileWatcher) in layoutFileWatchers where !groups.contains(group) {
+            fileWatcher.stop()
+            layoutFileWatchers[group] = nil
+        }
+        for group in groups where layoutFileWatchers[group] == nil {
+            layoutFileWatchers[group] = ConfigWatcher(path: LayoutStore.path(for: group)) { [weak self] in
+                self?.reload()
+            }
+        }
     }
 
     /// Configured rows retain file order. Unknown config entries remain in the

@@ -27,11 +27,18 @@ final class ConfigWatcher: @unchecked Sendable {
         watch()
     }
 
+    /// Ignore file events for the next `interval` seconds — set before wixels writes
+    /// the watched file itself. The 0.5s default comfortably covers the 0.12s
+    /// debounce plus the write.
+    @MainActor
+    func suppress(for interval: TimeInterval = 0.5) {
+        suspendUntil = Date().addingTimeInterval(interval)
+    }
+
     /// Run `body` (a config write) without the resulting file event triggering a reload.
-    /// The 0.5s window comfortably covers the 0.12s debounce plus the write itself.
     @MainActor
     func ignoringWrites(_ body: () -> Void) {
-        suspendUntil = Date().addingTimeInterval(0.5)
+        suppress()
         body()
     }
 
