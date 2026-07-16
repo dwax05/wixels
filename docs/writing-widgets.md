@@ -166,7 +166,7 @@ fatal error in a plugin can terminate Wixels.
 ## Native suite conventions
 
 The first-party `Macos` suite keeps one package per widget beneath
-`plugins/Macos`. Use the small semantic views from WixelsKit—`NativeCard`,
+`plugins/Macos`. Its suite-local `MacosWidgetPresentation` module provides `NativeCard`,
 `NativeHeader`, `NativeMetric`, `NativeStatusRow`, and `NativeStateView`—for the
 standard native card language. They resolve colors, typography, materials, spacing,
 and accessibility from `ThemeContext`; custom SwiftUI composition remains welcome

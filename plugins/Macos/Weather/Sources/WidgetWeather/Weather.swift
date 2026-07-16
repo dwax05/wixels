@@ -1,6 +1,7 @@
 import SwiftUI
 import Foundation
 import WixelsKit
+import MacosWidgetPresentation
 struct NativeWeatherInfo: Equatable, Sendable { let temperature: Int?; let condition: String; let symbol: String }
 final class NativeWeatherSource: DataSource, @unchecked Sendable {
     func read() async -> NativeWeatherInfo {

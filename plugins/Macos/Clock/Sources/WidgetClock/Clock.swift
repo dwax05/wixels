@@ -1,5 +1,6 @@
 import SwiftUI
 import WixelsKit
+import MacosWidgetPresentation
 
 struct ClockSample: Equatable, Sendable { var now: Date; var agenda: AgendaSnapshot }
 struct NativeClock: ThemeableWixel {

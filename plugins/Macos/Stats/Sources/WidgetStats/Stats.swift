@@ -1,5 +1,6 @@
 import SwiftUI
 import WixelsKit
+import MacosWidgetPresentation
 struct NativeStatsSample: Equatable, Sendable { let stats: StatsInfo; let network: ConnectivityInfo }
 struct NativeStats: ThemeableWixel {
  let source: StatsSource; let connectivity = ConnectivitySource(); static let kind = "stats"; static let refresh: RefreshPolicy = .interval(20)

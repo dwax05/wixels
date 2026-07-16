@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import WixelsKit
+import MacosWidgetPresentation
 
 struct NativePoster: ThemeableWixel {
     let monitor: MusicMonitor
