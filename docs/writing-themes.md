@@ -93,6 +93,11 @@ theme = "my-theme"
 Restart Wixels after installing a new theme library. Changing the configuration
 reloads the selected theme for already-installed libraries.
 
+To ship a theme with a small, selectable widget set, place both dylibs in the same
+immediate package folder, for example `~/.config/wixels/plugins/mypackage/`. That
+folder becomes a menu submenu; **Load Only This Package** activates its widgets and
+theme together.
+
 Packaged themes belong in `Wixels.app/Contents/Resources/themes`. Wixels does not
 scan the executable or SwiftPM build directories; `WIXELS_PLUGIN_ROOT` is only for
 explicit source-checkout staging runs. The release packager includes the theme paired

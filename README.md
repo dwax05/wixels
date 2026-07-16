@@ -128,8 +128,9 @@ your windows, so minimize or move a window aside to see them.
 
 Click the `w` icon in the menu bar to:
 
-- browse widgets by plugin folder, enable or hide them individually, or choose
-  **Enable Only This Folder** to persistently switch to one folder's widgets;
+- browse widgets by package, enable or hide them individually, or choose
+  **Load Only This Package** to persistently switch to one package's widgets and
+  bundled theme;
 - turn on **Edit Layout**, then drag widgets into place;
 - choose **Reset Layout** to restore each widget's default position; or
 - quit Wixels.
@@ -230,11 +231,22 @@ change the host app to create either one.
 - [Writing themes](docs/writing-themes.md)
 - [Architecture notes](docs/architecture.md)
 
-Third-party widgets go in `~/.config/wixels/plugins/`. Put each collection and its
-`libTheme*.dylib` in an immediate subfolder: that folder supplies both its menu
-submenu and theme. Flat legacy widgets and themes remain supported under
-**Ungrouped** / `~/.config/wixels/themes/`. Build them with the same Swift toolchain as Wixels. They
-run inside the app, so a broken extension can take down the host.
+Third-party widgets go in `~/.config/wixels/plugins/`. An immediate subfolder is a
+**package**: it supplies one menu submenu and may contain any mix of widget dylibs
+and one bundled theme. For example, a compact Cynaberii pet package can contain only
+the Cynaberii theme and the pet widget:
+
+```text
+~/.config/wixels/plugins/mypackage/
+  libThemeCynaberii.dylib
+  libWidgetPet.dylib
+```
+
+After restarting Wixels, `mypackage` appears as a submenu under `w`; choose **Load
+Only This Package** to activate just those files. Flat legacy widgets and themes
+remain supported under **Ungrouped** / `~/.config/wixels/themes/`. Build extensions
+with the same Swift toolchain as Wixels. They run inside the app, so a broken
+extension can take down the host.
 
 Packaged extensions are installed in `Wixels.app/Contents/Resources/plugins` and
 `Wixels.app/Contents/Resources/themes`. At runtime Wixels searches those folders,
@@ -247,21 +259,21 @@ override.
 To create an Apple-silicon app and ZIP for personal sharing:
 
 ```sh
-./package-app.sh 0.1.4
+./package-app.sh 0.1.5
 ```
 
 The output is written to `dist/Wixels.app` and
-`dist/Wixels-0.1.4-arm64.zip`.
+`dist/Wixels-0.1.5-arm64.zip`.
 
 Build the matching public extension asset separately:
 
 ```sh
-./package-extension-pack.sh 0.1.4
+./package-extension-pack.sh 0.1.5
 ```
 
-This writes `dist/Wixels-Cynaberii-0.1.4/` and
-`dist/Wixels-Cynaberii-0.1.4-arm64.zip`. Release both ZIPs together. See
-[`docs/release-v0.1.4.md`](docs/release-v0.1.4.md) for the release checklist and
+This writes `dist/Wixels-Cynaberii-0.1.5/` and
+`dist/Wixels-Cynaberii-0.1.5-arm64.zip`. Release both ZIPs together. See
+[`docs/release-v0.1.5.md`](docs/release-v0.1.5.md) for the release checklist and
 copy-ready notes.
 
 `swift build` builds only the host. Widget implementations live in explicit suites:
@@ -270,14 +282,14 @@ macOS suite may live under `plugins/Macos/`. Both share WixelsKit contracts, but
 one suite can be selected for a build. `themes/Cynaberii` and `themes/Macos` are the
 corresponding theme packages.
 
-`WIXELS_WIDGET_SUITE` is a generic folder selector, not a fixed list of themes. Use
-it to build or run just one immediate plugin folder; leave it unset to combine
-unrelated folders. If two folders provide different dylibs with the same filename,
+`WIXELS_WIDGET_SUITE` is a generic package selector, not a fixed list of themes. Use
+it to build or run just one immediate plugin package; leave it unset to combine
+unrelated packages. If two packages provide different dylibs with the same filename,
 Wixels keeps the first one it finds and logs the conflict rather than mixing their
 implementations.
 
-A folder that contains a `libTheme*.dylib` is a visual bundle. Its menu action
-**Enable Only This Folder** saves that folder as active and restarts Wixels so its
+A package that contains a `libTheme*.dylib` is a visual bundle. Its menu action
+**Load Only This Package** saves that package as active and restarts Wixels so its
 widgets and theme are loaded together. This makes switching between complete looks
 safe even when their widgets use the same filenames.
 
@@ -285,7 +297,7 @@ safe even when their widgets use the same filenames.
 
 ```sh
 WIXELS_WIDGET_SUITE=Cynaberii ./build-plugins.sh debug
-WIXELS_BUNDLED_WIDGET_SUITE=Cynaberii ./package-app.sh 0.1.4
+WIXELS_BUNDLED_WIDGET_SUITE=Cynaberii ./package-app.sh 0.1.5
 ```
 
 The release packager bundles no extensions by default. It never loads or packages

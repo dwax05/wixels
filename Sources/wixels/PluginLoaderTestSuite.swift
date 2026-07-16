@@ -51,6 +51,13 @@ func runPluginLoaderPathTestSuite() -> Int32 {
             print("FAIL plugin loader folder grouping")
             return 1
         }
+        guard PluginLoader.folder(for: "mypackage/libThemeCynaberii.dylib") == "mypackage" &&
+              PluginLoader.folder(for: "mypackage/libWidgetPet.dylib") == "mypackage" &&
+              PluginLoader.belongsToSelectedFolder("mypackage/libThemeCynaberii.dylib", selectedFolder: "mypackage") &&
+              PluginLoader.belongsToSelectedFolder("mypackage/libWidgetPet.dylib", selectedFolder: "mypackage") else {
+            print("FAIL package theme and widget grouping")
+            return 1
+        }
         guard PluginLoader.belongsToSelectedFolder("MyDesk/libWidgetClock.dylib", selectedFolder: "mydesk") &&
               !PluginLoader.belongsToSelectedFolder("Elsewhere/libWidgetClock.dylib", selectedFolder: "MyDesk") &&
               !PluginLoader.belongsToSelectedFolder("Elsewhere/libThemeElsewhere.dylib", selectedFolder: "MyDesk") else {
