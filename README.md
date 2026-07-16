@@ -265,14 +265,16 @@ To create an Apple-silicon app and ZIP for personal sharing:
 The output is written to `dist/Wixels.app` and
 `dist/Wixels-0.1.5-arm64.zip`.
 
-Build the matching public extension asset separately:
+Build the matching public extension assets separately:
 
 ```sh
-./package-extension-pack.sh 0.1.5
+./package-extension-pack.sh 0.1.5         # Cynaberii (default suite)
+./package-extension-pack.sh 0.1.5 Macos   # native-look macOS suite
 ```
 
-This writes `dist/Wixels-Cynaberii-0.1.5/` and
-`dist/Wixels-Cynaberii-0.1.5-arm64.zip`. Release both ZIPs together. See
+Each run writes `dist/Wixels-<Suite>-0.1.5/` and
+`dist/Wixels-<Suite>-0.1.5-arm64.zip`. Release the host ZIP and the pack ZIPs
+together. See
 [`docs/release-v0.1.5.md`](docs/release-v0.1.5.md) for the release checklist and
 copy-ready notes.
 
