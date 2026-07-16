@@ -65,13 +65,15 @@ private struct Mount {
     var anchor: WixelsKit.Anchor
     var offset: CGSize       // var: edit mode rewrites it on drop
     let defaultPlacement: Placement
-    let size: CGSize
+    var size: CGSize
     let sizing: PlacementSizing
     let interactive: Bool
-    let zBoost: Int          // nudges the window level up so it stacks above peers
-    let align: Alignment?    // pins content to a window edge (else NSHostingView centers)
+    var zBoost: Int          // nudges the window level up so it stacks above peers
+    var align: Alignment?    // pins content to a window edge (else NSHostingView centers)
     let kind: String
     let configIndex: Int     // index into the config's [[widget]] blocks (for write-back)
+    let group: String
+    let layoutID: String
     let makeView: (PaletteStore) -> AnyView
     var window: NSWindow?
     var enabled: Bool = true   // false = user turned it off from the menu bar
@@ -130,7 +132,7 @@ final class WidgetHost {
     let palette: PaletteStore
     private var mounts: [Mount] = []
     private let scheduler = WixelsKit.Scheduler()
-    private let placementWriter: ([PlacementChange]) -> Void
+    private let placementWriter: ([LayoutWrite]) -> Void
     private var menuEntries: [WidgetInfo]
     /// Freeze the coordinate system for this host lifetime. AppKit can change which
     /// screen is `main` while edit mode activates the accessory app; using that live
@@ -139,7 +141,7 @@ final class WidgetHost {
 
     init(palette: PaletteStore = PaletteStore(),
          menuEntries: [WidgetInfo] = [],
-         placementWriter: @escaping ([PlacementChange]) -> Void = Config.writePlacements) {
+         placementWriter: @escaping ([LayoutWrite]) -> Void = Config.writeLayouts) {
         self.palette = palette
         self.menuEntries = menuEntries
         self.placementWriter = placementWriter
@@ -151,14 +153,14 @@ final class WidgetHost {
     /// one model — a scheduler tick republishes exactly what the view observes.
     @discardableResult
     func mount(_ widget: any MountableWidget, placement p: Placement,
-               defaultPlacement: Placement, configIndex: Int) -> Self {
+               defaultPlacement: Placement, configIndex: Int, group: String = "Ungrouped", layoutID: String? = nil) -> Self {
         mounts.append(Mount(
             ticker: widget.makeTicker(),
             anchor: p.anchor, offset: p.offset,
             defaultPlacement: defaultPlacement,
             size: p.size, sizing: p.sizing,
             interactive: widget.interactive, zBoost: p.zBoost, align: p.align,
-            kind: widget.kind, configIndex: configIndex,
+            kind: widget.kind, configIndex: configIndex, group: group, layoutID: layoutID ?? widget.kind,
             makeView: { widget.makeView($0) }
         ))
         return self
@@ -223,22 +225,26 @@ final class WidgetHost {
     func resetLayout() {
         if editing { endEditMode(save: false) }
 
-        var changes: [PlacementChange] = []
+        var changedGroups = Set<String>()
         for i in mounts.indices {
             let defaults = mounts[i].defaultPlacement
-            guard mounts[i].anchor != defaults.anchor || mounts[i].offset != defaults.offset else {
+            guard mounts[i].anchor != defaults.anchor || mounts[i].offset != defaults.offset ||
+                    mounts[i].size != defaults.size || mounts[i].zBoost != defaults.zBoost ||
+                    mounts[i].align != defaults.align else {
                 continue
             }
             mounts[i].anchor = defaults.anchor
             mounts[i].offset = defaults.offset
+            mounts[i].size = defaults.size
+            mounts[i].zBoost = defaults.zBoost
+            mounts[i].align = defaults.align
             if let window = mounts[i].window {
+                window.setFrame(NSRect(origin: window.frame.origin, size: mounts[i].size), display: true)
                 window.setFrameOrigin(origin(for: mounts[i], size: window.frame.size))
             }
-            changes.append(.init(configIndex: mounts[i].configIndex,
-                                 anchor: mounts[i].anchor,
-                                 offset: mounts[i].offset))
+            changedGroups.insert(mounts[i].group)
         }
-        placementWriter(changes)
+        writeLayouts(for: changedGroups)
     }
 
     private func beginEditMode() {
@@ -259,18 +265,27 @@ final class WidgetHost {
         editing = false
         removeEditKeyCapture()
         if save {
-            var changes: [PlacementChange] = []
+            var changedGroups = Set<String>()
             for i in mounts.indices {
                 let persistMove = movedConfigIndexes.contains(mounts[i].configIndex)
-                if let off = exitEdit(&mounts[i], save: true, commitOffset: persistMove) {
-                    changes.append(.init(configIndex: mounts[i].configIndex, anchor: nil, offset: off))
-                }
+                if exitEdit(&mounts[i], save: true, commitOffset: persistMove) != nil { changedGroups.insert(mounts[i].group) }
             }
-            if !changes.isEmpty { placementWriter(changes) }
+            writeLayouts(for: changedGroups)
         } else {
             for i in mounts.indices { _ = exitEdit(&mounts[i], save: false) }
         }
         movedConfigIndexes.removeAll()
+    }
+
+    private func writeLayouts(for groups: Set<String>) {
+        guard !groups.isEmpty else { return }
+        placementWriter(groups.sorted().map { group in
+            LayoutWrite(group: group, records: mounts.filter { $0.group == group }.map {
+                LayoutRecord(configIndex: $0.configIndex, id: $0.layoutID,
+                             placement: Placement(anchor: $0.anchor, offset: $0.offset, size: $0.size,
+                                                  zBoost: $0.zBoost, align: $0.align, sizing: $0.sizing))
+            })
+        })
     }
 
     /// A hidden non-activating key panel lets this accessory app receive keyDown without

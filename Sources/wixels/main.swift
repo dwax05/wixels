@@ -53,6 +53,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var host: WidgetHost!
     private var statusBar: StatusBarController!
     private var watcher: ConfigWatcher?
+    private var layoutWatcher: ConfigWatcher?
     private var gallery: PreviewGalleryController?
 
     func applicationDidFinishLaunching(_ note: Notification) {
@@ -81,6 +82,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         // Watch the layout file and rebuild live when it changes (WIXELS_CONFIG honoured).
         self.watcher = ConfigWatcher(path: Config.path) { [weak self] in self?.reload() }
+        self.layoutWatcher = ConfigWatcher(path: LayoutStore.directory) { [weak self] in self?.reload() }
     }
 
     /// Construct a host from the current config and mount every widget. Reads `[colors]`
@@ -91,13 +93,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // replaces only that file selection (see PaletteStore).
         let cfg = Config.load()
         let menuEntries = makeMenuEntries(config: cfg)
+        let groupsByIndex = Dictionary(uniqueKeysWithValues: cfg.entries.compactMap { entry in
+            let group = entry.folder ?? pluginCatalog.widgets.filter { $0.kind == entry.kind }.map(\.group).min()
+            return group.map { (entry.sourceIndex, $0) }
+        })
+        let idsByIndex = Config.stableIDs(entries: cfg.entries, groups: groupsByIndex)
         let services = Services()                                  // shared samplers (cpu, music)
         let host = WidgetHost(
             palette: PaletteStore(colorsPath: cfg.colors.file, overrides: cfg.colors.overrides),
             menuEntries: menuEntries,
             // Suppress the file event our own drag-save write would otherwise raise.
-            placementWriter: { [weak self] changes in
-                self?.watcher?.ignoringWrites { Config.writePlacements(changes) }
+            placementWriter: { [weak self] writes in
+                self?.watcher?.ignoringWrites {
+                    let scoped = writes.map { write in
+                        LayoutWrite(group: write.group, records: write.records,
+                                    memberIndexes: Set(groupsByIndex.compactMap { $0.value == write.group ? $0.key : nil }))
+                    }
+                    self?.layoutWatcher?.ignoringWrites { Config.writeLayouts(scoped) }
+                }
             }
         )
 
@@ -105,24 +118,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // widgets — frog before clock).
         for entry in cfg.entries {
             guard entry.enabled else { continue }
-            let group = entry.folder ?? pluginCatalog.widgets
-                .filter { $0.kind == entry.kind }.map(\.group).min()
+            let group = groupsByIndex[entry.sourceIndex]
             guard let group, pluginCatalog.widgets.contains(PluginWidget(group: group, kind: entry.kind)) else {
                 Log.note("no widget for folder '\(entry.folder ?? "(none)")' and kind '\(entry.kind)'")
                 continue
             }
             let themeID = pluginCatalog.themeIDsByGroup[group] ?? entry.theme ?? cfg.theme ?? "macos"
+            let layout = idsByIndex[entry.sourceIndex].flatMap { LayoutStore.load(group: group)[$0] }
             if let spec = registrar.specs[entry.kind] {
-                let placement = entry.placement.apply(to: spec.defaultPlacement)
+                let placement = (layout ?? entry.placement).apply(to: spec.defaultPlacement)
                 host.mount(spec.build(services, entry.options), placement: placement,
-                           defaultPlacement: spec.defaultPlacement, configIndex: entry.sourceIndex)
+                           defaultPlacement: spec.defaultPlacement, configIndex: entry.sourceIndex,
+                           group: group, layoutID: idsByIndex[entry.sourceIndex])
             } else if registrar.themedSpecs[entry.kind] != nil,
                       let resolved = registrar.resolveThemed(kind: entry.kind,
                           themeID: themeID,
                           services: services, options: entry.options) {
-                let placement = entry.placement.apply(to: resolved.placement)
+                let placement = (layout ?? entry.placement).apply(to: resolved.placement)
                 host.mount(resolved.widget, placement: placement, defaultPlacement: resolved.placement,
-                           configIndex: entry.sourceIndex)
+                           configIndex: entry.sourceIndex, group: group, layoutID: idsByIndex[entry.sourceIndex])
             } else {
                 Log.note("no widget for kind '\(entry.kind)'")
             }

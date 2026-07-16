@@ -175,6 +175,58 @@ func runConfigTestSuite() -> Int32 {
         let activeFolder = Config.selectedPluginFolder()
         try expect(activeFolder == "Cynaberii",
                    "active plugin folder persists independently of widget settings")
+
+        let cynGroup = "Cynaberii-\(ProcessInfo.processInfo.processIdentifier)"
+        let macGroup = "Macos-\(ProcessInfo.processInfo.processIdentifier)"
+        try """
+        [[widget]]
+        kind = "clock"
+        folder = "\(cynGroup)"
+        anchor = "bottomLeft"
+        offset = [4, 5]
+        [[widget]]
+        kind = "clock"
+        folder = "\(cynGroup)"
+        offset = [40, 50]
+        [[widget]]
+        kind = "clock"
+        folder = "\(macGroup)"
+        offset = [80, 90]
+        [[widget]]
+        kind = "clock"
+        offset = [120, 130]
+        """.write(toFile: tempPath, atomically: true, encoding: .utf8)
+        let grouped = Config.load()
+        let groups = [0: cynGroup, 1: cynGroup, 2: macGroup, 3: "Ungrouped"]
+        let ids = Config.stableIDs(entries: grouped.entries, groups: groups)
+        try expect(ids == [0: "clock", 1: "clock-2", 2: "clock", 3: "clock"],
+                   "stable IDs are deterministic per group for duplicate kinds")
+        let cynPlacement = Placement(anchor: .topLeft, offset: .init(width: 21, height: 22),
+                                     size: .init(width: 123, height: 45), zBoost: 3, align: .leading)
+        let macPlacement = Placement(anchor: .bottomRight, offset: .init(width: 31, height: 32),
+                                     size: .init(width: 222, height: 99))
+        let ungroupedPlacement = Placement(anchor: .center, offset: .init(width: 41, height: 42),
+                                           size: .init(width: 100, height: 100))
+        Config.writeLayouts([
+            .init(group: cynGroup, records: [
+                .init(configIndex: 0, id: ids[0]!, placement: cynPlacement),
+                .init(configIndex: 1, id: ids[1]!, placement: cynPlacement),
+            ]),
+            .init(group: macGroup, records: [.init(configIndex: 2, id: ids[2]!, placement: macPlacement)]),
+            .init(group: "Ungrouped", records: [.init(configIndex: 3, id: ids[3]!, placement: ungroupedPlacement)]),
+        ])
+        let fallback = Placement(anchor: .topLeft)
+        let layouts = (LayoutStore.load(group: cynGroup)["clock"]?.apply(to: fallback),
+                       LayoutStore.load(group: macGroup)["clock"]?.apply(to: fallback),
+                       LayoutStore.load(group: "Ungrouped")["clock"]?.apply(to: fallback))
+        let migratedText = try String(contentsOfFile: tempPath, encoding: .utf8)
+        let migrated = Config.load()
+        try expect(layouts.0?.offset == cynPlacement.offset && layouts.1?.offset == macPlacement.offset &&
+                   layouts.2?.offset == ungroupedPlacement.offset && LayoutStore.filename(for: cynGroup) != LayoutStore.filename(for: macGroup),
+                   "independent group layout files keep same-kind placements separate")
+        try expect(migrated.entries.prefix(2).map(\.id) == ["clock", "clock-2"] &&
+                   !migratedText.contains("anchor =") && !migratedText.contains("offset ="),
+                   "first group layout save assigns IDs and migrates legacy placement fields")
         print("PASS config suite")
         return 0
     } catch {

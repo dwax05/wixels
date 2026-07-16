@@ -105,7 +105,7 @@ still missing after a restart, quarantine is the usual cause.
 
 To uninstall, quit Wixels, delete the app, and optionally remove
 `~/.config/wixels/plugins/`,
-`~/.config/wixels/desktop.toml`.
+`~/.config/wixels/desktop.toml` and `~/.config/wixels/layouts/`.
 Please report beta feedback and bugs through [GitHub Issues](https://github.com/dwax05/wixels/issues).
 
 If you are running from this repository, build the host and optional extensions separately:
@@ -135,14 +135,16 @@ Click the `w` icon in the menu bar to:
 - choose **Reset Layout** to restore each widget's default position; or
 - quit Wixels.
 
-Layout changes made by dragging and menu-bar visibility toggles are saved to
-`desktop.toml`.
+Widget enablement, options, themes, and group membership are saved to
+`desktop.toml`. Layout changes are saved independently in
+`layouts/<encoded-group>.toml`, so packages can keep the same widget kinds without
+sharing positions.
 
 ## Customize your desktop
 
-Edit `~/.config/wixels/desktop.toml` in any text editor. Wixels watches this file and
-reloads it after you save, so you can change the layout, theme, widget options, and
-palette settings without restarting.
+Edit `~/.config/wixels/desktop.toml` for widget settings, or a file in
+`~/.config/wixels/layouts/` for a group's placement. Wixels watches both and reloads
+after you save, so changes take effect without restarting.
 
 The smallest widget entry is:
 
@@ -152,7 +154,9 @@ kind = "clock"
 ```
 
 Omit `enabled` (or set it to `true`) to mount a widget. Set `enabled = false` to
-hide it while keeping its placement, theme, and options for later re-enabling.
+hide it while keeping its theme and options for later re-enabling. Add `folder` to
+select a plugin group; a stable `id` is added automatically when that group's layout
+is first saved.
 Delete a widget entry to return it to the unconfigured state. The order of entries controls the stacking order
 when widgets overlap. You can set a global theme or override it for one widget:
 

@@ -25,6 +25,9 @@ struct ConfigEntry {
     /// always writes back to the block that produced this entry.
     let sourceIndex: Int
     let kind: String
+    /// Stable identity used by the group-local layout file. Nil rows acquire one
+    /// the first time their group is laid out.
+    let id: String?
     /// Nil is a legacy row; it resolves to the first loaded folder for its kind.
     let folder: String?
     let enabled: Bool
@@ -67,12 +70,20 @@ struct PlacementOverride {
     }
 }
 
-/// A placement change made by layout edit mode. `anchor == nil` means a normal
-/// drag changed only the offset; reset supplies the plugin's default anchor too.
-struct PlacementChange {
+/// A fully resolved placement stored outside desktop.toml. The source index is
+/// used only while migrating legacy rows; the on-disk key is `id`.
+struct LayoutRecord {
     let configIndex: Int
-    let anchor: WixelsKit.Anchor?
-    let offset: CGSize
+    let id: String
+    let placement: Placement
+}
+
+struct LayoutWrite {
+    let group: String
+    let records: [LayoutRecord]
+    /// All configured rows resolved to this group, including disabled/unavailable
+    /// ones. This lets legacy folder-less rows migrate correctly.
+    var memberIndexes: Set<Int> = []
 }
 
 enum Config {
@@ -109,7 +120,7 @@ enum Config {
         let theme = validThemeID(table["theme"]?.table?["default"]?.string)
         let entries: [ConfigEntry] = (table["widget"]?.array).map(Array.init)?.enumerated().compactMap { index, item in
             guard let t = item.table, let kind = t["kind"]?.string else { return nil }
-            return ConfigEntry(sourceIndex: index, kind: kind, folder: folder(from: t), enabled: enabled(from: t),
+            return ConfigEntry(sourceIndex: index, kind: kind, id: validID(t["id"]?.string), folder: folder(from: t), enabled: enabled(from: t),
                                theme: validThemeID(t["theme"]?.string),
                                placement: placement(from: t), options: options(from: t))
         } ?? []
@@ -154,6 +165,11 @@ enum Config {
     }
 
     private static func folder(from t: TOMLTable) -> String? { folder(from: t, key: "folder") }
+
+    private static func validID(_ id: String?) -> String? {
+        guard let id = id?.trimmingCharacters(in: .whitespacesAndNewlines), !id.isEmpty else { return nil }
+        return id
+    }
 
     private static func folder(from t: TOMLTable?, key: String) -> String? {
         guard let value = t?[key] else { return nil }
@@ -207,29 +223,85 @@ enum Config {
         return nil
     }
 
-    /// Persist dragged positions by regenerating the TOML from its parsed document.
-    /// This deliberately trades comments/formatting for a simple, reliable write path
-    /// while retaining every parsed table, option, and unknown field.
-    static func writePlacements(_ changes: [PlacementChange]) {
-        guard !changes.isEmpty,
+    /// One group's rows in file order: the ordinal, kind, and any explicit `id`.
+    private typealias IDRow = (index: Int, kind: String, id: String?)
+
+    /// Assign IDs within one group: existing IDs are never changed; id-less rows
+    /// get `kind`, `kind-2`, … in file order. Mount-time resolution (`stableIDs`)
+    /// and migration (`writeLayouts`) share this so a row can never mount under
+    /// one ID and be written under another.
+    private static func assignIDs(rows: [IDRow]) -> [Int: String] {
+        var result: [Int: String] = [:], used = Set<String>()
+        for row in rows {
+            guard let id = row.id else { continue }
+            result[row.index] = id; used.insert(id)
+        }
+        for row in rows where row.id == nil {
+            var n = 1, candidate = row.kind
+            while used.contains(candidate) { n += 1; candidate = "\(row.kind)-\(n)" }
+            result[row.index] = candidate; used.insert(candidate)
+        }
+        return result
+    }
+
+    /// Assign deterministic IDs within each plugin group. Existing IDs are never
+    /// changed, so duplicate widget rows survive reordering and package switches.
+    static func stableIDs(entries: [ConfigEntry], groups: [Int: String]) -> [Int: String] {
+        var rowsByGroup: [String: [IDRow]] = [:]
+        for entry in entries {
+            guard let group = groups[entry.sourceIndex] else { continue }
+            rowsByGroup[group, default: []].append((entry.sourceIndex, entry.kind, entry.id))
+        }
+        return rowsByGroup.values.reduce(into: [:]) { result, rows in
+            result.merge(assignIDs(rows: rows)) { current, _ in current }
+        }
+    }
+
+    /// Write group-scoped layout files. On a group's first write, migrate its
+    /// desktop rows: assign stable IDs and remove legacy placement fields.
+    static func writeLayouts(_ writes: [LayoutWrite]) {
+        guard !writes.isEmpty,
               let text = try? String(contentsOfFile: path, encoding: .utf8),
               let table = try? TOMLTable(string: text),
               let widgets = table["widget"]?.array else { return }
-        for change in changes {
-            let index = change.configIndex
-            guard index >= 0, index < widgets.count,
-                  let widget = widgets[index]?.table else { continue }
-            if let anchor = change.anchor { widget["anchor"] = anchor.rawValue }
-            let value = TOMLArray()
-            value.append(Int(change.offset.width))
-            value.append(Int(change.offset.height))
-            widget["offset"] = value
+        var generatedIDs: [Int: String] = [:], migratedIndexes = Set<Int>()
+        for write in writes {
+            // A missing ID is the migration marker. Repeating this idempotent
+            // pass also repairs a desktop.toml restored after its layout file.
+            var rows: [IDRow] = []
+            for index in 0..<widgets.count {
+                guard let row = widgets[index]?.table, rowBelongsToGroup(row, index: index, write: write),
+                      let kind = row["kind"]?.string else { continue }
+                migratedIndexes.insert(index)
+                rows.append((index, kind, validID(row["id"]?.string)))
+            }
+            let assigned = assignIDs(rows: rows)
+            for row in rows where row.id == nil { generatedIDs[row.index] = assigned[row.index] }
+            LayoutStore.write(group: write.group, records: write.records)
         }
-
-        let out = table.convert(to: .toml)
+        // TOMLKit intentionally exposes no public table-key deletion API. Remove
+        // placement assignments only from widget rows migrated in this write.
+        var output: [String] = [], widgetIndex = -1
+        for line in table.convert(to: .toml).split(separator: "\n", omittingEmptySubsequences: false) {
+            let trimmed = String(line).trimmingCharacters(in: .whitespaces)
+            if trimmed == "[[widget]]" {
+                widgetIndex += 1
+                output.append(String(line))
+                if let id = generatedIDs[widgetIndex] { output.append("id = '\(id)'") }
+                continue
+            }
+            if migratedIndexes.contains(widgetIndex), ["anchor =", "offset =", "size =", "zBoost =", "align ="].contains(where: trimmed.hasPrefix) { continue }
+            output.append(String(line))
+        }
+        let out = output.joined(separator: "\n") + "\n"
         if (try? out.write(toFile: path, atomically: true, encoding: .utf8)) == nil {
-            Log.note("failed to write offsets to \(path)")
+            Log.note("failed to migrate layout fields in \(path)")
         }
+    }
+
+    private static func rowGroup(_ row: TOMLTable) -> String { folder(from: row) ?? "Ungrouped" }
+    private static func rowBelongsToGroup(_ row: TOMLTable, index: Int, write: LayoutWrite) -> Bool {
+        write.memberIndexes.contains(index) || rowGroup(row) == write.group
     }
 
     /// Persist a menu toggle while retaining every other field in the source TOML.
