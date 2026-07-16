@@ -232,6 +232,8 @@ func runConfigTestSuite() -> Int32 {
         folder = "\(cynGroup)"
         anchor = "bottomLeft"
         offset = [4, 5]
+        [widget.options]
+        size = 7
         [[widget]]
         kind = "clock"
         folder = "\(cynGroup)"
@@ -275,6 +277,8 @@ func runConfigTestSuite() -> Int32 {
         try expect(migrated.entries.prefix(2).map(\.id) == ["clock", "clock-2"] &&
                    !migratedText.contains("anchor =") && !migratedText.contains("offset ="),
                    "first group layout save assigns IDs and migrates legacy placement fields")
+        try expect(migrated.entries[0].options.int("size") == 7,
+                   "migration keeps option keys that share placement field names")
         print("PASS config suite")
         return 0
     } catch {

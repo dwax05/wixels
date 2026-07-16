@@ -293,16 +293,20 @@ enum Config {
         }
         // TOMLKit intentionally exposes no public table-key deletion API. Remove
         // placement assignments only from widget rows migrated in this write.
-        var output: [String] = [], widgetIndex = -1
+        var output: [String] = [], widgetIndex = -1, inWidgetRoot = false
         for line in table.convert(to: .toml).split(separator: "\n", omittingEmptySubsequences: false) {
             let trimmed = String(line).trimmingCharacters(in: .whitespaces)
             if trimmed == "[[widget]]" {
                 widgetIndex += 1
+                inWidgetRoot = true
                 output.append(String(line))
                 if let id = generatedIDs[widgetIndex] { output.append("id = '\(id)'") }
                 continue
             }
-            if migratedIndexes.contains(widgetIndex), ["anchor =", "offset =", "size =", "zBoost =", "align ="].contains(where: trimmed.hasPrefix) { continue }
+            // Sub-tables like [widget.options] may hold keys named like placement
+            // fields; only the widget row's own top-level assignments migrate.
+            if trimmed.hasPrefix("[") { inWidgetRoot = false }
+            if inWidgetRoot, migratedIndexes.contains(widgetIndex), ["anchor =", "offset =", "size =", "zBoost =", "align ="].contains(where: trimmed.hasPrefix) { continue }
             output.append(String(line))
         }
         let out = output.joined(separator: "\n") + "\n"
