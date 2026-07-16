@@ -23,26 +23,30 @@ For example, a small Cynaberii pet package may contain:
   libWidgetPet.dylib
 ```
 
-Download both matching assets:
+Download the host app plus at least one extension pack:
 
 - `Wixels-0.1.5-arm64.zip` — the host app.
 - `Wixels-Cynaberii-0.1.5-arm64.zip` — the separately installed 12-widget
   Cynaberii pack with its bundled theme.
+- `Wixels-Macos-0.1.5-arm64.zip` — the 6-widget native-look macOS pack with its
+  bundled theme.
 
 Extract the host app and move it to Applications. The beta is ad-hoc signed and not
 notarized, so Gatekeeper blocks the first launch: on macOS 14 right-click the app,
 choose **Open**, and confirm; on macOS 15 or later dismiss the warning, then use
-**System Settings > Privacy & Security > Open Anyway**. Quit Wixels, extract the
-matching extension pack, and copy its self-contained `plugins/` contents into
-`~/.config/wixels/plugins/`, preserving subfolders. There is no separate `themes/`
+**System Settings > Privacy & Security > Open Anyway**. Quit Wixels, extract each
+extension pack you want, and copy its self-contained `plugins/` contents into
+`~/.config/wixels/plugins/`, preserving subfolders. Each pack installs as its own
+package submenu, so **Load Only This Package** switches between complete looks. There is no separate `themes/`
 payload: each package carries its theme dylib beside its widget dylibs. Restart
 Wixels and approve the quarantine prompt when it appears.
 
 ## Release checklist
 
 - Commit the v0.1.5 package-menu changes and push the release branch.
-- Run `./package-app.sh 0.1.5` and `./package-extension-pack.sh 0.1.5`.
-- Verify the two ZIP checksums and their expected licenses/notices.
+- Run `./package-app.sh 0.1.5`, `./package-extension-pack.sh 0.1.5`, and
+  `./package-extension-pack.sh 0.1.5 Macos`.
+- Verify the three ZIP checksums and their expected licenses/notices.
 - On a clean macOS 14+ Apple-silicon account, verify the host’s first-launch and
   Gatekeeper flow, then install the extension pack and approve its quarantine prompt.
 - Create `~/.config/wixels/plugins/mypackage/` containing
@@ -50,4 +54,4 @@ Wixels and approve the quarantine prompt when it appears.
   `mypackage` is a submenu and **Load Only This Package** leaves only the pet widget
   active with the Cynaberii theme.
 - Create and push tag `v0.1.5-beta.1`, then create a GitHub **pre-release** using
-  this document’s GitHub release notes and upload both ZIPs.
+  this document’s GitHub release notes and upload all three ZIPs.
