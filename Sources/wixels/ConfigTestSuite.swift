@@ -164,7 +164,10 @@ func runConfigTestSuite() -> Int32 {
         try expect(obsoletePath.file == nil, "legacy [paths].colors no longer configures palette")
 
         let tempPath = "/tmp/wixels-config-tests-\(ProcessInfo.processInfo.processIdentifier).toml"
-        try """
+        func writeTestConfig(_ text: String) throws {
+            try text.write(toFile: tempPath, atomically: true, encoding: .utf8)
+        }
+        try writeTestConfig("""
         [theme]
         default = "cynaberii"
         [[widget]]
@@ -175,7 +178,7 @@ func runConfigTestSuite() -> Int32 {
         mystery = "keep me"
           [widget.options]
           answer = 42
-        """.write(toFile: tempPath, atomically: true, encoding: .utf8)
+        """)
         setenv("WIXELS_CONFIG", tempPath, 1)
         defer { unsetenv("WIXELS_CONFIG"); try? FileManager.default.removeItem(atPath: tempPath) }
         Config.writeWidgetToggle(sourceIndex: 0, kind: "clock", group: "Cynaberii", enabled: false)
@@ -226,7 +229,7 @@ func runConfigTestSuite() -> Int32 {
 
         let cynGroup = "Cynaberii-\(ProcessInfo.processInfo.processIdentifier)"
         let macGroup = "Macos-\(ProcessInfo.processInfo.processIdentifier)"
-        try """
+        try writeTestConfig("""
         [[widget]]
         kind = "clock"
         folder = "\(cynGroup)"
@@ -245,7 +248,7 @@ func runConfigTestSuite() -> Int32 {
         [[widget]]
         kind = "clock"
         offset = [120, 130]
-        """.write(toFile: tempPath, atomically: true, encoding: .utf8)
+        """)
         let grouped = Config.load()
         let groups = [0: cynGroup, 1: cynGroup, 2: macGroup, 3: "Ungrouped"]
         let ids = Config.stableIDs(entries: grouped.entries, groups: groups)
@@ -282,7 +285,7 @@ func runConfigTestSuite() -> Int32 {
 
         let inactiveGroup = "Inactive-\(ProcessInfo.processInfo.processIdentifier)"
         try? FileManager.default.removeItem(atPath: LayoutStore.path(for: inactiveGroup))
-        try """
+        try writeTestConfig("""
         [[widget]]
         kind = "clock"
         folder = "\(inactiveGroup)"
@@ -292,7 +295,7 @@ func runConfigTestSuite() -> Int32 {
         folder = "\(inactiveGroup)"
         enabled = false
         offset = [30, 40]
-        """.write(toFile: tempPath, atomically: true, encoding: .utf8)
+        """)
         let inactive = Config.load()
         let inactiveIDs = Config.stableIDs(entries: inactive.entries, groups: [0: inactiveGroup, 1: inactiveGroup])
         let activePlacement = Placement(anchor: .topLeft, offset: .init(width: 11, height: 22))
@@ -326,7 +329,7 @@ func runConfigTestSuite() -> Int32 {
                    LayoutStore.load(group: inactiveGroup)["missing"]?.apply(to: fallback).offset == unavailablePlacement.offset,
                    "saving after a widget is disabled merges its record with current mounted state")
 
-        try """
+        try writeTestConfig("""
         [[widget]]
         kind = "clock"
         folder = "\(cynGroup)"
@@ -335,7 +338,7 @@ func runConfigTestSuite() -> Int32 {
         kind = "clock"
         folder = "\(cynGroup)"
         id = "clock"
-        """.write(toFile: tempPath, atomically: true, encoding: .utf8)
+        """)
         let duplicated = Config.load()
         let dupGroups = [0: cynGroup, 1: cynGroup]
         let dupIDs = Config.stableIDs(entries: duplicated.entries, groups: dupGroups)

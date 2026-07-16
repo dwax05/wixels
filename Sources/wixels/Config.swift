@@ -288,8 +288,21 @@ enum Config {
             persistedIndexes.formUnion(write.records.map(\.configIndex))
             LayoutStore.write(group: write.group, records: write.records)
         }
-        // TOMLKit intentionally exposes no public table-key deletion API. Remove
-        // placement assignments only from widget rows persisted in this write.
+        let out = migratedLayoutTOML(table: table, generatedIDs: generatedIDs,
+                                     persistedIndexes: persistedIndexes,
+                                     renamedIndexes: renamedIndexes)
+        if (try? out.write(toFile: path, atomically: true, encoding: .utf8)) == nil {
+            Log.note("failed to migrate layout fields in \(path)")
+        }
+    }
+
+    /// TOMLKit intentionally exposes no public table-key deletion API, so render
+    /// the migration by filtering only root-level widget assignments. Keeping it
+    /// separate from layout persistence makes the row-level migration contract
+    /// explicit: IDs apply to every group member; placement moves only after a
+    /// record for that row is written.
+    private static func migratedLayoutTOML(table: TOMLTable, generatedIDs: [Int: String],
+                                           persistedIndexes: Set<Int>, renamedIndexes: Set<Int>) -> String {
         var output: [String] = [], widgetIndex = -1, inWidgetRoot = false
         for line in table.convert(to: .toml).split(separator: "\n", omittingEmptySubsequences: false) {
             let trimmed = String(line).trimmingCharacters(in: .whitespaces)
@@ -307,10 +320,7 @@ enum Config {
             if inWidgetRoot, persistedIndexes.contains(widgetIndex), ["anchor =", "offset =", "size =", "zBoost =", "align ="].contains(where: trimmed.hasPrefix) { continue }
             output.append(String(line))
         }
-        let out = output.joined(separator: "\n") + "\n"
-        if (try? out.write(toFile: path, atomically: true, encoding: .utf8)) == nil {
-            Log.note("failed to migrate layout fields in \(path)")
-        }
+        return output.joined(separator: "\n") + "\n"
     }
 
     private static func rowGroup(_ row: TOMLTable) -> String { group(from: row) ?? "Ungrouped" }
