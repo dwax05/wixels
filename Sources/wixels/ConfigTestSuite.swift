@@ -25,6 +25,17 @@ func runConfigTestSuite() -> Int32 {
         try expect(selected.theme == "macos", "global theme parses")
         try expect(selected.entries[1].theme == "cynaberii", "widget theme override parses")
 
+        let themedCatalog = PluginCatalog(themeIDsByGroup: ["Pack": "pack-theme"])
+        try expect(resolvedThemeID(for: selected.entries[1], group: "Pack", catalog: themedCatalog,
+                                   globalDefault: selected.theme) == "cynaberii" &&
+                   resolvedThemeID(for: selected.entries[0], group: "Pack", catalog: themedCatalog,
+                                   globalDefault: selected.theme) == "pack-theme" &&
+                   resolvedThemeID(for: selected.entries[0], group: "Other", catalog: themedCatalog,
+                                   globalDefault: selected.theme) == "macos" &&
+                   resolvedThemeID(for: selected.entries[0], group: "Other", catalog: .init(),
+                                   globalDefault: nil) == "macos",
+                   "theme precedence is row, package, global, then macos")
+
         let malformed = try Config.parse("""
         [theme]
         default = "Not Valid"
@@ -34,6 +45,15 @@ func runConfigTestSuite() -> Int32 {
         """)
         try expect(malformed.theme == nil && malformed.entries[0].theme == nil,
                    "malformed theme IDs are ignored")
+
+        let namespaced = try Config.parse("""
+        [[widget]]
+        kind = "macos/clock"
+        [[widget]]
+        kind = "bad namespace/clock"
+        """)
+        try expect(namespaced.entries.map(\.kind) == ["macos/clock"],
+                   "namespaced widget kinds parse and malformed namespaces are skipped")
 
         let explicit = try Config.parse("""
         [[widget]]
@@ -93,6 +113,22 @@ func runConfigTestSuite() -> Int32 {
                    duplicateMenu.map(\.label) == ["clock", "clock"] &&
                    duplicateMenu.map(\.enabled) == [true, false],
                    "same plugin kind in separate folders remains separate")
+
+        // The registrar may key a themed spec as "suite/poster", but catalog and
+        // durable package identities must stay bare so a menu toggle creates a row
+        // that the active package can mount on the next rebuild.
+        let canonicalConfig = try Config.parse("""
+        [[widget]]
+        kind = "custom/poster"
+        folder = "MyPackage"
+        enabled = false
+        """)
+        let canonicalMenu = widgetMenuEntries(config: canonicalConfig, available: [
+            PluginWidget(group: "MyPackage", kind: "poster"),
+        ])
+        try expect(canonicalMenu.count == 1 && canonicalMenu[0].kind == "custom/poster" &&
+                   canonicalMenu[0].group == "MyPackage",
+                   "canonical registry keys do not leak into package membership")
 
         let colorConfig = try Config.parse("""
         [colors]
@@ -156,20 +192,32 @@ func runConfigTestSuite() -> Int32 {
                    !appended.contains("enabled = true"),
                    "enabling an absent widget writes a foldered minimal entry")
 
+        let bareMenu = widgetMenuEntries(config: Config.load(), available: [
+            PluginWidget(group: "MyPackage", kind: "poster"),
+        ])
+        guard let uncheckedPoster = bareMenu.first(where: { $0.kind == "poster" && !$0.enabled }) else {
+            throw ConfigTestFailure(description: "bare package widget missing from menu")
+        }
+        Config.writeWidgetToggle(sourceIndex: uncheckedPoster.sourceIndex, kind: uncheckedPoster.kind,
+                                 folder: uncheckedPoster.group, themeID: nil, enabled: true)
+        let toggled = Config.load().entries.first { $0.kind == "poster" && $0.folder == "MyPackage" }
+        try expect(toggled?.enabled == true,
+                   "toggling a bare catalog widget creates a mountable package row")
+
         Config.writeExclusiveWidgetGroup(selected: [
             PluginWidget(group: "Cynaberii", kind: "clock"),
             PluginWidget(group: "Cynaberii", kind: "stats"),
         ], configured: [
             0: PluginWidget(group: "Cynaberii", kind: "clock"),
             1: PluginWidget(group: "Cynaberii", kind: "owl"),
-        ], themeIDsByGroup: ["Cynaberii": "cynaberii"])
+        ])
         let exclusive = Config.load()
         try expect(exclusive.entries.first(where: { $0.kind == "clock" })?.enabled == true &&
                    exclusive.entries.first(where: { $0.kind == "owl" })?.enabled == false &&
                    exclusive.entries.first(where: { $0.kind == "stats" })?.enabled == true &&
-                   exclusive.entries.first(where: { $0.kind == "clock" })?.theme == "cynaberii" &&
+                   exclusive.entries.first(where: { $0.kind == "clock" })?.theme == "macos" &&
                    exclusive.entries.first(where: { $0.kind == "clock" })?.options.int("answer") == 42,
-                   "folder selection enables selected kinds, disables others, and preserves fields")
+                   "folder selection enables selected kinds while preserving fields and theme overrides")
 
         Config.writeActivePluginFolder("Cynaberii")
         let activeFolder = Config.selectedPluginFolder()

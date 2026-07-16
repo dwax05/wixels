@@ -1,8 +1,7 @@
 # Writing themes
 
-A Wixels theme is a Swift package that defines a reusable visual style for a widget
-suite. `themes/Cynaberii` pairs with `plugins/Cynaberii`; `themes/Macos` is reserved
-for the future macOS widget suite. Themes change
+A Wixels theme is a Swift package that defines a reusable visual style for widgets.
+Themes are independently publishable and may be shipped beside a widget pack. Themes change
 colors, typography, panels, media shapes, borders, shadows, and spacing. They do not
 replace widget content or move widgets.
 
@@ -12,12 +11,19 @@ Copy the example package:
 
 ```sh
 cp -R themes/Template themes/MyTheme
+mkdir -p plugins/MyTheme
+cp plugins/Template/wixels-package.json plugins/MyTheme/wixels-package.json
 ```
 
 Rename `ThemeTemplate` in `Package.swift` and the source directory. Keep the dynamic
 library product named `ThemeMyTheme`; the build script uses that convention.
 
 The template is in [themes/Template](../themes/Template).
+
+Edit the copied manifest so its `id` is your package ID and its sole library entry
+is `{ "file": "libThemeMyTheme.dylib", "themeID": "my-theme" }`. A theme-only
+package has no widget source directories; the manifest is still placed at
+`plugins/MyTheme/wixels-package.json` so the packager has one package root.
 
 ## Register a theme
 
@@ -66,11 +72,11 @@ Or build only your package:
 swift build --package-path themes/MyTheme
 ```
 
-The repository build stages the result under `build/debug/themes`. Select the paired
-widget suite explicitly when building a shipped theme:
+The repository build stages a package's theme under `build/debug/plugins/<Package>`.
+Select the package explicitly when building a shipped theme:
 
 ```sh
-WIXELS_WIDGET_SUITE=Cynaberii ./build-plugins.sh debug
+WIXELS_WIDGET_SUITE=MyPackage ./build-plugins.sh debug
 ```
 
 For a user
@@ -98,10 +104,9 @@ immediate package folder, for example `~/.config/wixels/plugins/mypackage/`. Tha
 folder becomes a menu submenu; **Load Only This Package** activates its widgets and
 theme together.
 
-Packaged themes belong in `Wixels.app/Contents/Resources/themes`. Wixels does not
-scan the executable or SwiftPM build directories; `WIXELS_PLUGIN_ROOT` is only for
-explicit source-checkout staging runs. The release packager includes the theme paired
-with the selected widget suite only; it includes no theme in a host-only package.
+The host app contains no packaged themes. Put a distributable theme in a package
+folder with a `wixels-package.json`, then publish it with
+`./package-extension-pack.sh X.Y.Z MyPackage`.
 
 ## Compatibility and safety
 

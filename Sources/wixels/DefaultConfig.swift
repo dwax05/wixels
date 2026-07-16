@@ -26,9 +26,13 @@ extension Config {
     #
     # A [widget.options] table passes per-widget settings (e.g. disk-snail path).
     #
-    # This host-only beta does not include widgets. Install the matching
-    # Wixels-Cynaberii extension pack into ~/.config/wixels/, then restart Wixels.
-    # Until then, the entries below are harmless and appear as unavailable in logs.
+    # A kind may be namespaced ("macos/poster") when two installed suites register
+    # the same kind; a bare kind resolves to the first loaded. Each widget's theme
+    # resolves as: this row's `theme` > its folder's bundled theme > [theme] default
+    # > macos.
+    #
+    # This host-only beta does not include widgets. Install any compatible extension
+    # pack into ~/.config/wixels/, then add its widget kinds below and restart Wixels.
 
     # Optional palette. WIXELS_COLORS replaces only `file`; individual values below
     # always win. Omit any value to use the pywal file, then the selected theme default.
@@ -38,52 +42,9 @@ extension Config {
     # foreground = "F3E9D2"
     # color0 = "#1A2C2D" # color1 through color15 are also supported
 
-    [[widget]]
-    kind = "sys"
-
-    [[widget]]
-    kind = "nowplaying"
-
-    [[widget]]
-    kind = "disk-snail"
-      [widget.options]
-      path = "/"                 # volume the shell gauge measures
-
-    [[widget]]
-    kind = "pet"
-
-    [[widget]]
-    kind = "plant"
-
-    [[widget]]
-    kind = "quotes"
-      [widget.options]
-      path = "~/.config/wixels/quotes.json"   # JSON array of quote strings
-
-    [[widget]]
-    kind = "frog"                # before clock: clock orders in front, hides frog body
-
-    [[widget]]
-    kind = "clock"
-
-    [[widget]]
-    kind = "stats"
-
-    [[widget]]
-    kind = "owl"
-
-    [[widget]]
-    kind = "weather"
-
-    [[widget]]
-    kind = "poster"
-
-    # Legacy placement example (migrated automatically on its first layout save):
+    # Example widget (uncomment and replace after installing a pack):
     # [[widget]]
-    # kind = "stats"
-    # anchor = "bottomLeft"
-    # offset = [20, 36]
-    # size = [220, 164]
-    # align = "leading"
+    # kind = "my-widget"
+    # theme = "my-theme"          # optional; overrides the pack's bundled theme
     """
 }

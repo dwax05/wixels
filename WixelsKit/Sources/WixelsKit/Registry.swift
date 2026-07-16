@@ -33,8 +33,15 @@ public struct NoActions: Sendable { public init() {} }
 public struct ThemedWidgetSpec: Sendable {
     public let kind: String
     public let defaultPlacement: Placement
+    /// Optional suite namespace (lowercase kebab-case). Disambiguates the same kind
+    /// registered by two suites: the config may address this spec as
+    /// `"<namespace>/<kind>"`. An invalid namespace is dropped with a note.
+    public let namespace: String?
     let build: @MainActor @Sendable (Services, Options, ThemeDefinition) -> any MountableWidget
     let previews: @MainActor @Sendable (Services, ThemeDefinition) -> [RegisteredWidgetPreview]
+
+    /// The registry key: `"namespace/kind"` when namespaced, the bare kind otherwise.
+    public var canonicalKind: String { namespace.map { "\($0)/\(kind)" } ?? kind }
 
     /// Preserves the original plugin ABI for already-compiled themed widgets.
     public init<W: ThemeableWixel>(widget: W.Type, defaultPlacement: Placement,
@@ -43,9 +50,16 @@ public struct ThemedWidgetSpec: Sendable {
     }
 
     public init<W: ThemeableWixel>(widget: W.Type, defaultPlacement: Placement,
+                                   namespace: String? = nil,
                                    previews: [WidgetPreview<W.Sample>] = [],
                                    build: @escaping @MainActor @Sendable (Services, Options) -> W) {
         kind = W.kind; self.defaultPlacement = defaultPlacement
+        if let namespace, !ThemeManifest.isValidID(namespace) {
+            Log.note("invalid widget namespace '\(namespace)' for kind '\(W.kind)' — ignoring")
+            self.namespace = nil
+        } else {
+            self.namespace = namespace
+        }
         self.build = { services, options, theme in eraseThemed(build(services, options), theme: theme) }
         self.previews = { services, theme in
             previews.map { preview in
@@ -84,27 +98,48 @@ public struct ResolvedThemedWidget {
 /// plugin's `wixels_register`, then resolves the config against `specs`.
 public final class Registrar: @unchecked Sendable {
     public private(set) var specs: [String: WidgetSpec] = [:]
+    /// Keyed by `ThemedWidgetSpec.canonicalKind` ("namespace/kind" or the bare kind).
     public private(set) var themedSpecs: [String: ThemedWidgetSpec] = [:]
     public private(set) var themes: [String: ThemeDefinition] = [:]
+    /// Bare kind → the first-registered canonical kind, so legacy `kind = "poster"`
+    /// config rows keep resolving after suites start namespacing.
+    private var bareKindAliases: [String: String] = [:]
     private var warnedThemeIDs = Set<String>()
     public init() {}
+
+    /// Strips one leading `namespace/` segment; the bare kind otherwise.
+    public static func bareKind(_ kind: String) -> String {
+        kind.split(separator: "/", omittingEmptySubsequences: true).last.map(String.init) ?? kind
+    }
 
     private func logDuplicate(_ kind: String) {
         Log.note("duplicate widget kind '\(kind)' — keeping the first")
     }
 
     public func add(_ spec: WidgetSpec) {
-        if specs[spec.kind] != nil || themedSpecs[spec.kind] != nil {
+        if specs[spec.kind] != nil || themedSpecs[spec.kind] != nil || bareKindAliases[spec.kind] != nil {
             logDuplicate(spec.kind); return
         }
         specs[spec.kind] = spec
     }
 
     public func add(_ spec: ThemedWidgetSpec) {
-        if themedSpecs[spec.kind] != nil || specs[spec.kind] != nil {
-            logDuplicate(spec.kind); return
+        let canonical = spec.canonicalKind
+        if themedSpecs[canonical] != nil || specs[canonical] != nil || specs[spec.kind] != nil {
+            logDuplicate(canonical); return
         }
-        themedSpecs[spec.kind] = spec
+        themedSpecs[canonical] = spec
+        if let first = bareKindAliases[spec.kind] {
+            Log.note("widget kind '\(spec.kind)' also registered as '\(canonical)' — bare '\(spec.kind)' keeps '\(first)'; use '\(canonical)' to select this one")
+        } else {
+            bareKindAliases[spec.kind] = canonical
+        }
+    }
+
+    /// Looks up a themed spec by bare or namespaced kind. A bare kind resolves to
+    /// the first registration of that kind.
+    public func themedSpec(for kind: String) -> ThemedWidgetSpec? {
+        themedSpecs[kind] ?? bareKindAliases[kind].flatMap { themedSpecs[$0] }
     }
 
     public func add(_ theme: ThemeDefinition) {
@@ -126,7 +161,7 @@ public final class Registrar: @unchecked Sendable {
 
     @MainActor public func resolveThemed(kind: String, themeID: String?, services: Services,
                                          options: Options) -> ResolvedThemedWidget? {
-        guard let spec = themedSpecs[kind] else { return nil }
+        guard let spec = themedSpec(for: kind) else { return nil }
         guard let theme = resolveTheme(themeID) else {
             Log.note("no 'macos' fallback theme is loaded — cannot mount themed widget '\(kind)'")
             return nil

@@ -19,8 +19,7 @@ func runPluginLoaderPathTestSuite() -> Int32 {
         bundleResourceURL: URL(fileURLWithPath: "/ignored/resources"),
         homeDirectory: URL(fileURLWithPath: "/Users/tester"),
         developmentRoot: URL(fileURLWithPath: "/tmp/wixels-stage"))
-    guard staged == ["/tmp/wixels-stage/plugins", "/tmp/wixels-stage/themes",
-                     "/Users/tester/.config/wixels/plugins", "/Users/tester/.config/wixels/themes"] else {
+    guard staged == ["/tmp/wixels-stage/plugins", "/tmp/wixels-stage/themes"] else {
         print("FAIL plugin loader development paths: \(staged)")
         return 1
     }

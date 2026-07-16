@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build one widget suite and its paired theme suite into build/<config>.
+# Build one manifest-backed extension package into build/<config>.
 #
 # Usage: WIXELS_WIDGET_SUITE=Cynaberii ./build-plugins.sh [debug|release]
 #        ./build-plugins.sh clean
@@ -78,7 +78,6 @@ else
     SUITE_ROOT="$ROOT/plugins/$SUITE"
     THEME_ROOT="$ROOT/themes/$SUITE"
     [ -d "$SUITE_ROOT" ] || { echo "error: unknown widget suite '$SUITE'" >&2; exit 2; }
-    [ -d "$THEME_ROOT" ] || { echo "error: no paired theme suite for '$SUITE'" >&2; exit 2; }
 
     while IFS= read -r manifest; do
         dir="$(dirname "$manifest")"
@@ -91,10 +90,12 @@ else
     done < <(find "$SUITE_ROOT" -mindepth 2 -maxdepth 2 -name Package.swift -print | sort)
 
     name="$SUITE"
-    if selected "$name" "$THEME_SELECTION"; then
+    if [ -d "$THEME_ROOT" ] && selected "$name" "$THEME_SELECTION"; then
         echo "==> building theme: $name"
         swift build --package-path "$THEME_ROOT" -c "$CONFIG" --product "Theme$name"
         for dylib in "$THEME_ROOT/.build/$CONFIG"/libTheme*.dylib; do install_dylib "$dylib" "$PLUGIN_DEST/$SUITE"; done
+    elif [ ! -d "$THEME_ROOT" ] && [ "$THEME_SELECTION" != "__all__" ]; then
+        echo "warning: theme selection ignored; package '$SUITE' has no paired theme source"
     fi
     if [ -f "$SUITE_ROOT/wixels-package.json" ]; then
         /bin/cp -f "$SUITE_ROOT/wixels-package.json" "$PLUGIN_DEST/$SUITE/wixels-package.json"

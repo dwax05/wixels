@@ -18,6 +18,7 @@ struct SysBox: ThemeableWixel {
         ThemedWidgetSpec(widget: Self.self,
             defaultPlacement: .init(anchor: .topLeft, offset: .init(width: 40, height: -60),
                                     size: .init(width: 180, height: 120)),
+            namespace: "cynaberii",
             build: { _, _ in SysBox(source: SysSource()) })
     }
     static let refresh: RefreshPolicy = .interval(30)

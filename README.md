@@ -272,7 +272,7 @@ The output is written to `dist/Wixels.app` and
 Build the matching public extension assets separately:
 
 ```sh
-./package-extension-pack.sh 0.1.5         # Cynaberii (default suite)
+./package-extension-pack.sh 0.1.5 Cynaberii
 ./package-extension-pack.sh 0.1.5 Macos   # native-look macOS suite
 ```
 
@@ -282,17 +282,14 @@ together. See
 [`docs/release-v0.1.5.md`](docs/release-v0.1.5.md) for the release checklist and
 copy-ready notes.
 
-`swift build` builds only the host. Widget implementations live in explicit suites:
-the current pixel-art `Cynaberii` suite is under `plugins/Cynaberii/`, while a future
-macOS suite may live under `plugins/Macos/`. Both share WixelsKit contracts, but only
-one suite can be selected for a build. `themes/Cynaberii` and `themes/Macos` are the
-corresponding theme packages.
+`swift build` builds only the host. Widget and theme implementations live in
+independent packages under `plugins/<Package>` and `themes/<Package>`, sharing the
+WixelsKit contracts but never being compiled into the app.
 
 `WIXELS_WIDGET_SUITE` is a generic package selector, not a fixed list of themes. Use
-it to build or run just one immediate plugin package; leave it unset to combine
-unrelated packages. If two packages provide different dylibs with the same filename,
-Wixels keeps the first one it finds and logs the conflict rather than mixing their
-implementations.
+it to build or run one immediate plugin package. At runtime, if neither it nor
+`[plugins].activeFolder` is set, Wixels selects the first installed themed package;
+packages do not compose because overlapping Swift dylibs cannot safely coexist.
 
 A package that contains a `libTheme*.dylib` is a visual bundle. Its menu action
 **Load Only This Package** saves that package as active and restarts Wixels so its
@@ -303,12 +300,12 @@ safe even when their widgets use the same filenames.
 
 ```sh
 WIXELS_WIDGET_SUITE=Cynaberii ./build-plugins.sh debug
-WIXELS_BUNDLED_WIDGET_SUITE=Cynaberii ./package-app.sh 0.1.5
+./package-extension-pack.sh 0.1.5 Cynaberii
 ```
 
-The release packager bundles no extensions by default. It never loads or packages
-multiple suites together; selected widgets retain their existing kinds such as
-`clock`, `stats`, and `frog`.
+The release app packager always bundles no extensions. The extension packager validates
+its payload against that package's manifest, so third-party packages can use their own
+names and widget kinds.
 
 ## Troubleshooting
 

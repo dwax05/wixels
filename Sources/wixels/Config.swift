@@ -119,7 +119,7 @@ enum Config {
         let colors = colorConfiguration(from: table["colors"]?.table)
         let theme = validThemeID(table["theme"]?.table?["default"]?.string)
         let entries: [ConfigEntry] = (table["widget"]?.array).map(Array.init)?.enumerated().compactMap { index, item in
-            guard let t = item.table, let kind = t["kind"]?.string else { return nil }
+            guard let t = item.table, let kind = t["kind"]?.string.flatMap(validKind) else { return nil }
             return ConfigEntry(sourceIndex: index, kind: kind, id: validID(t["id"]?.string), folder: folder(from: t), enabled: enabled(from: t),
                                theme: validThemeID(t["theme"]?.string),
                                placement: placement(from: t), options: options(from: t))
@@ -145,6 +145,18 @@ enum Config {
             return nil
         }
         return rgb
+    }
+
+    /// A kind is either bare (accepted as-is, matching every existing config) or a
+    /// namespaced `"suite/kind"` pair whose segments must both be kebab-case IDs.
+    private static func validKind(_ kind: String) -> String? {
+        guard kind.contains("/") else { return kind }
+        let parts = kind.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
+        guard parts.count == 2, parts.allSatisfy(ThemeManifest.isValidID) else {
+            Log.note("invalid widget kind '\(kind)' — expected \"kind\" or \"namespace/kind\"; skipping")
+            return nil
+        }
+        return kind
     }
 
     private static func validThemeID(_ id: String?) -> String? {
@@ -339,10 +351,10 @@ enum Config {
     }
 
     /// Enable every widget in one discovered menu group and disable every other
-    /// discovered widget, without changing unrecognised config entries.
+    /// discovered widget, without changing unrecognised config entries or explicit
+    /// per-row theme overrides. Package themes resolve at mount time.
     static func writeExclusiveWidgetGroup(selected: Set<PluginWidget>,
-                                          configured: [Int: PluginWidget],
-                                          themeIDsByGroup: [String: String]) {
+                                          configured: [Int: PluginWidget]) {
         guard let text = try? String(contentsOfFile: path, encoding: .utf8),
               let table = try? TOMLTable(string: text) else {
             Log.note("failed to read config before selecting widget folder")
@@ -353,9 +365,6 @@ enum Config {
         for (index, item) in (widgets.map(Array.init) ?? []).enumerated() {
             guard let widget = item.table, let identity = configured[index] else { continue }
             widget["enabled"] = selected.contains(identity)
-            if selected.contains(identity), let themeID = themeIDsByGroup[identity.group] {
-                widget["theme"] = themeID
-            }
         }
         let missing = selected.subtracting(existing).sorted { lhs, rhs in
             lhs.group == rhs.group ? lhs.kind < rhs.kind : lhs.group < rhs.group
@@ -368,7 +377,6 @@ enum Config {
                 let widget = TOMLTable()
                 widget["kind"] = identity.kind
                 widget["folder"] = identity.group
-                if let themeID = themeIDsByGroup[identity.group] { widget["theme"] = themeID }
                 destination.append(widget)
             }
         }

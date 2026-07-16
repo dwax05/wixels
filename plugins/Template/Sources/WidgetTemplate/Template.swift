@@ -25,6 +25,9 @@ struct TemplateWidget: ThemeableWixel {
         ThemedWidgetSpec(widget: Self.self,
             defaultPlacement: .init(anchor: .center,
                                     size: .init(width: 150, height: 70)),
+            // Optional: namespace: "my-suite" lets configs disambiguate a shared
+            // kind as "my-suite/template". Themes are chosen by the package folder
+            // or desktop.toml, never by widget source.
             build: { _, _ in TemplateWidget() })
     }
 

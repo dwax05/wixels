@@ -25,6 +25,7 @@ struct CatPet: ThemeableWixel {
         ThemedWidgetSpec(widget: Self.self,
             defaultPlacement: .init(anchor: .bottomLeft, offset: .init(width: 224, height: 116),
                                     size: .init(width: 92, height: 106)),
+            namespace: "cynaberii",
             build: { s, _ in CatPet(source: PetSource(cpu: s.cpu, music: s.music)) })
     }
     static let refresh: RefreshPolicy = .interval(3)   // native sources are cheap, so poll snappier than pet.py's 10s

@@ -6,17 +6,19 @@ available in `desktop.toml`.
 
 ## Start from the template
 
-From the Wixels repository, copy the generic template and give it a package name.
-New suite-owned widgets belong beneath that suite; the current pixel-art widgets
-belong to Cynaberii:
+From the Wixels repository, copy the generic template into a package directory and
+give the package a stable ID:
 
 ```sh
-cp -R plugins/Template plugins/Cynaberii/MyThing
+mkdir -p plugins/MyPackage
+cp -R plugins/Template plugins/MyPackage/MyThing
+cp plugins/Template/wixels-package.json plugins/MyPackage/wixels-package.json
 ```
 
 Rename `WidgetTemplate` in `Package.swift`, the source directory, and the Swift files
 to match your widget. Keep the library product named `WidgetMyThing`; the build script
-uses that convention.
+uses that convention. Edit the package-root `wixels-package.json` with your package
+ID and the renamed widget dylib/kind before publishing.
 
 The template is in [plugins/Template](../plugins/Template). It contains a working
 widget, not just an empty scaffold.
@@ -100,17 +102,17 @@ Build the standalone widget packages while developing:
 ./build-plugins.sh debug
 ```
 
-To build only your package:
+To build only your widget:
 
 ```sh
-swift build --package-path plugins/Cynaberii/MyThing
+swift build --package-path plugins/MyPackage/MyThing
 ```
 
 The repository build stages the result under `build/debug/plugins`. Select the suite
 explicitly when building the repository:
 
 ```sh
-WIXELS_WIDGET_SUITE=Cynaberii ./build-plugins.sh debug
+WIXELS_WIDGET_SUITE=MyPackage ./build-plugins.sh debug
 ```
 
 To run the host
@@ -125,11 +127,10 @@ For a user install, copy `libWidgetMyThing.dylib` to a package folder such as
 `~/.config/wixels/plugins/MyCollection/`; that folder becomes its menu submenu. A
 package can also include a `libTheme*.dylib`, so users can load just that widget set
 and its matching theme from **Load Only This Package**.
-Packaged widgets belong in `Wixels.app/Contents/Resources/plugins`; the app never
-loads libraries from its executable or SwiftPM build directories. The release
-packager includes no suite unless `WIXELS_BUNDLED_WIDGET_SUITE=Cynaberii` (or a
-future suite name) is set. Add the widget to the layout with its stable existing
-kind:
+Packaged widgets are installed under `~/.config/wixels/plugins/<Package>/`; the
+host app contains no extension packs. Include a `wixels-package.json` beside the
+dylibs, then publish with `./package-extension-pack.sh X.Y.Z <Package>`. Add the
+widget to the layout with its stable existing kind:
 
 ```toml
 [[widget]]

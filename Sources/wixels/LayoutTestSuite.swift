@@ -39,17 +39,21 @@ func runLayoutTestSuite() -> Int32 {
     let config = Config.load()
     let services = Services()
     let registrar = Registrar()
-    _ = PluginLoader.load(into: registrar)
+    let catalog = PluginLoader.load(into: registrar)
     let host = WidgetHost(palette: PaletteStore(colorsPath: config.colors.file,
                                                  overrides: config.colors.overrides),
                           placementWriter: { _ in })
 
     for entry in config.entries {
+        guard entry.enabled else { continue }
+        let bareKind = Registrar.bareKind(entry.kind)
+        guard let group = entry.folder ?? catalog.widgets.filter({ $0.kind == bareKind }).map(\.group).min(),
+              catalog.widgets.contains(PluginWidget(group: group, kind: bareKind)) else { continue }
         if let spec = registrar.specs[entry.kind] {
             host.mount(spec.build(services, entry.options), placement: spec.defaultPlacement,
                        defaultPlacement: spec.defaultPlacement, configIndex: entry.sourceIndex)
         } else if let resolved = registrar.resolveThemed(kind: entry.kind,
-            themeID: entry.theme ?? config.theme ?? "macos",
+            themeID: resolvedThemeID(for: entry, group: group, catalog: catalog, globalDefault: config.theme),
             services: services, options: entry.options) {
             host.mount(resolved.widget, placement: resolved.placement,
                        defaultPlacement: resolved.placement, configIndex: entry.sourceIndex)

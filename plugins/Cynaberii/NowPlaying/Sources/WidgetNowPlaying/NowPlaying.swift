@@ -19,6 +19,7 @@ struct NowPlaying: ThemeableWixel {
         ThemedWidgetSpec(widget: Self.self,
             defaultPlacement: .init(anchor: .bottomLeft, offset: .init(width: 12, height: 36),
                                     size: .init(width: 320, height: 96)),
+            namespace: "cynaberii",
             build: { s, _ in NowPlaying(monitor: s.music) })
     }
     static let refresh: RefreshPolicy = .interval(3)

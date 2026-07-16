@@ -24,8 +24,10 @@ func widgetMenuEntries(config: LoadedConfig, available: Set<PluginWidget>,
     var seen: [PluginWidget: Int] = [:]
     var result: [WidgetInfo] = []
     for entry in config.entries {
-        guard let group = entry.folder ?? fallbackGroups[entry.kind] else { continue }
-        let identity = PluginWidget(group: group, kind: entry.kind)
+        // The catalog records bare kinds; a namespaced config row matches on its tail.
+        let bareKind = Registrar.bareKind(entry.kind)
+        guard let group = entry.folder ?? fallbackGroups[bareKind] else { continue }
+        let identity = PluginWidget(group: group, kind: bareKind)
         guard available.contains(identity) else { continue }
         let n = (seen[identity] ?? 0) + 1
         seen[identity] = n
@@ -42,6 +44,12 @@ func widgetMenuEntries(config: LoadedConfig, available: Set<PluginWidget>,
                                  group: identity.group, themeID: themeIDsByGroup[identity.group], enabled: false))
     }
     return result
+}
+
+/// Theme ownership lives in the installed package, never in a widget's source.
+func resolvedThemeID(for entry: ConfigEntry, group: String, catalog: PluginCatalog,
+                     globalDefault: String?) -> String {
+    entry.theme ?? catalog.themeIDsByGroup[group] ?? globalDefault ?? "macos"
 }
 
 @MainActor
@@ -71,7 +79,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         pluginCatalog = PluginLoader.load(into: registrar, excluding: excluded)
         activateSelectedFolderIfNeeded()
         if registrar.specs.isEmpty && registrar.themedSpecs.isEmpty {
-            Log.note("no widgets installed — install the matching Cynaberii extension pack in ~/.config/wixels, then restart")
+            Log.note("no widgets installed — install a compatible extension pack in ~/.config/wixels, then restart")
         }
 
         buildSession()
@@ -94,7 +102,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let cfg = Config.load()
         let menuEntries = makeMenuEntries(config: cfg)
         let groupsByIndex = Dictionary(uniqueKeysWithValues: cfg.entries.compactMap { entry in
-            let group = entry.folder ?? pluginCatalog.widgets.filter { $0.kind == entry.kind }.map(\.group).min()
+            let bareKind = Registrar.bareKind(entry.kind)
+            let group = entry.folder ?? pluginCatalog.widgets.filter { $0.kind == bareKind }.map(\.group).min()
             return group.map { (entry.sourceIndex, $0) }
         })
         let idsByIndex = Config.stableIDs(entries: cfg.entries, groups: groupsByIndex)
@@ -119,18 +128,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         for entry in cfg.entries {
             guard entry.enabled else { continue }
             let group = groupsByIndex[entry.sourceIndex]
-            guard let group, pluginCatalog.widgets.contains(PluginWidget(group: group, kind: entry.kind)) else {
+            guard let group, pluginCatalog.widgets.contains(PluginWidget(group: group, kind: Registrar.bareKind(entry.kind))) else {
                 Log.note("no widget for folder '\(entry.folder ?? "(none)")' and kind '\(entry.kind)'")
                 continue
             }
-            let themeID = pluginCatalog.themeIDsByGroup[group] ?? entry.theme ?? cfg.theme ?? "macos"
+            // Per-widget precedence: config `theme` > the folder's bundled theme
+            // > global `[theme] default` > macos.
+            let themeID = resolvedThemeID(for: entry, group: group, catalog: pluginCatalog,
+                                          globalDefault: cfg.theme)
             let layout = idsByIndex[entry.sourceIndex].flatMap { LayoutStore.load(group: group)[$0] }
             if let spec = registrar.specs[entry.kind] {
                 let placement = (layout ?? entry.placement).apply(to: spec.defaultPlacement)
                 host.mount(spec.build(services, entry.options), placement: placement,
                            defaultPlacement: spec.defaultPlacement, configIndex: entry.sourceIndex,
                            group: group, layoutID: idsByIndex[entry.sourceIndex])
-            } else if registrar.themedSpecs[entry.kind] != nil,
+            } else if registrar.themedSpec(for: entry.kind) != nil,
                       let resolved = registrar.resolveThemed(kind: entry.kind,
                           themeID: themeID,
                           services: services, options: entry.options) {
@@ -157,8 +169,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let host else { return }
         let on = !info.enabled
         watcher?.ignoringWrites {
+            // Theme resolution is automatic (folder theme > global),
+            // so a toggle no longer pins the folder theme onto the row.
             Config.writeWidgetToggle(sourceIndex: info.sourceIndex, kind: info.kind,
-                                     folder: info.group, themeID: info.themeID, enabled: on)
+                                     folder: info.group, themeID: nil, enabled: on)
         }
         host.shutdown()
         buildSession()
@@ -181,17 +195,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         })
         guard !selected.isEmpty else { return }
         watcher?.ignoringWrites {
-            Config.writeExclusiveWidgetGroup(selected: selected, configured: configured,
-                                             themeIDsByGroup: Dictionary(infos.compactMap { info in
-                info.themeID.map { (info.group, $0) }
-            }, uniquingKeysWith: { first, _ in first }))
+            Config.writeExclusiveWidgetGroup(selected: selected, configured: configured)
             Config.writeActivePluginFolder(group)
         }
         restart()
     }
 
     /// After a restart, the selected package's widgets are now available to the
-    /// catalog. Enable them and apply their bundled theme before mounting.
+    /// catalog. Enable them before mounting; their bundled theme resolves at mount.
     private func activateSelectedFolderIfNeeded() {
         guard let group = Config.selectedPluginFolder() else { return }
         let infos = makeMenuEntries(config: Config.load())
@@ -200,10 +211,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let configured = Dictionary(uniqueKeysWithValues: infos.compactMap { info in
             info.sourceIndex.map { ($0, info.identity) }
         })
-        Config.writeExclusiveWidgetGroup(selected: selected, configured: configured,
-                                         themeIDsByGroup: Dictionary(infos.compactMap { info in
-            info.themeID.map { (info.group, $0) }
-        }, uniquingKeysWith: { first, _ in first }))
+        Config.writeExclusiveWidgetGroup(selected: selected, configured: configured)
     }
 
     private func restart() {

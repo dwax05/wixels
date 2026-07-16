@@ -27,6 +27,7 @@ struct DiskSnail: ThemeableWixel {
             defaultPlacement: .init(anchor: .topLeft, offset: .init(width: -3, height: -30),
                                     size: .init(width: DiskSnail.Crawl.containerW,
                                                 height: DiskSnail.Crawl.containerH)),
+            namespace: "cynaberii",
             build: { _, opts in DiskSnail(disk: DiskSource(path: opts.string("path") ?? "/")) })
     }
     static let refresh: RefreshPolicy = .idleStatic

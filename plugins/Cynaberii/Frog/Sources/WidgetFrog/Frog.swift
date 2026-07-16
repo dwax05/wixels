@@ -20,6 +20,7 @@ struct Frog: ThemeableWixel {
         ThemedWidgetSpec(widget: Self.self,
             defaultPlacement: .init(anchor: .topCenter, offset: .init(width: 0, height: -136),
                                     size: .init(width: 100, height: 200)),
+            namespace: "cynaberii",
             build: { _, _ in Frog(source: FrogSource()) })
     }
     static let refresh: RefreshPolicy = .interval(8)   // thermal changes slowly

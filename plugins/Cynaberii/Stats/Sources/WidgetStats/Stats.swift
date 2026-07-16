@@ -17,6 +17,7 @@ struct Stats: ThemeableWixel {
         ThemedWidgetSpec(widget: Self.self,
             defaultPlacement: .init(anchor: .bottomRight, offset: .init(width: 0, height: 36),
                                     size: .init(width: 220, height: 164), align: .trailing),
+            namespace: "cynaberii",
             build: { s, _ in Stats(source: StatsSource(cpu: s.cpu)) })
     }
     static let refresh: RefreshPolicy = .interval(20)

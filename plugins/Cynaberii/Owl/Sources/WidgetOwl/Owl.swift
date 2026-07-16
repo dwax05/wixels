@@ -17,6 +17,7 @@ struct Owl: ThemeableWixel {
         ThemedWidgetSpec(widget: Self.self,
             defaultPlacement: .init(anchor: .bottomRight, offset: .init(width: 0, height: 150),
                                     size: .init(width: 90, height: 70)),
+            namespace: "cynaberii",
             build: { _, _ in Owl(source: OwlSource()) })
     }
     static let refresh: RefreshPolicy = .interval(7)   // wake within ~7s of return

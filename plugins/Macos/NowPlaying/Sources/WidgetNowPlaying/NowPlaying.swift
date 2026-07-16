@@ -4,7 +4,7 @@ import WixelsKit
 import MacosWidgetPresentation
 struct NativeNowPlaying: ThemeableWixel {
  let monitor: MusicMonitor; static let kind = "nowplaying"; static let refresh: RefreshPolicy = .interval(3); static let interactive = true
- static func spec() -> ThemedWidgetSpec { .init(widget: Self.self, defaultPlacement: .init(anchor: .bottomLeft, offset: .init(width: 28, height: 32), size: .init(width: 300, height: 102), sizing: .fitContent), previews: [.init("Playing", sample: .init(hasTrack: true, title: "A Kind of Magic", artist: "Queen", playing: true, art: "")), .init("Empty", sample: .idle)]) { s, _ in .init(monitor: s.music) } }
+ static func spec() -> ThemedWidgetSpec { .init(widget: Self.self, defaultPlacement: .init(anchor: .bottomLeft, offset: .init(width: 28, height: 32), size: .init(width: 300, height: 102), sizing: .fitContent), namespace: "macos", previews: [.init("Playing", sample: .init(hasTrack: true, title: "A Kind of Magic", artist: "Queen", playing: true, art: "")), .init("Empty", sample: .idle)]) { s, _ in .init(monitor: s.music) } }
  func sample() async -> NowPlayingInfo { await monitor.nowPlaying() }
  func render(_ s: NowPlayingInfo, _ theme: ThemeContext) -> some View { NativeNowPlayingView(info: s, theme: theme, toggle: { await monitor.togglePlayPause() }) }
 }

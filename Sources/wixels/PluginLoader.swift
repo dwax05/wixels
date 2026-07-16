@@ -71,6 +71,9 @@ enum PluginLoader {
             loadableFiles(in: dir).filter { ($0 as NSString).lastPathComponent.hasPrefix("libTheme") }
                 .map(folder(for:)).filter { $0 != ungrouped }
         })
+        // Packages are alternatives: with no persisted or process selection, use a
+        // deterministic installed package.  Loading overlapping Swift dylibs from
+        // several folders is unsafe, and would make the menu/config ambiguous.
         let selectedFolder = requestedFolder ?? themedFolders.sorted().first
         let manifests = compatibleManifests(in: dirs)
         // Reuse the first loaded implementation for copies of the same plugin
@@ -85,9 +88,7 @@ enum PluginLoader {
                 let group = folder(for: file)
                 guard manifestAllows(filename: filename, group: group, directory: dir, manifests: manifests) else { continue }
                 if group != ungrouped { catalog.folders.insert(group) }
-                guard belongsToSelectedFolder(file, selectedFolder: selectedFolder,
-                                               themedFolders: themedFolders,
-                                               restrictAll: requestedFolder != nil) else { continue }
+                guard belongsToSelectedFolder(file, selectedFolder: selectedFolder) else { continue }
                 if filename.hasPrefix("libWidget"), let previous = loadedWidgetsByFilename[filename] {
                     if FileManager.default.contentsEqual(atPath: path, andPath: previous.path) {
                         catalog.widgets.formUnion(previous.kinds.map { PluginWidget(group: group, kind: $0) })
@@ -102,17 +103,28 @@ enum PluginLoader {
                 for spec in isolated.themedSpecs.values { registrar.add(spec) }
                 for theme in isolated.themes.values { registrar.add(theme) }
                 if filename.hasPrefix("libWidget") {
-                    let kinds = Set(isolated.specs.keys).union(isolated.themedSpecs.keys)
+                    // Registry keys may be namespaced to disambiguate implementation
+                    // lookup. Package membership and durable config/menu identities
+                    // remain the plugin's bare kind.
+                    let kinds = Set(Set(isolated.specs.keys)
+                        .union(isolated.themedSpecs.keys)
+                        .map(Registrar.bareKind))
                     loadedWidgetsByFilename[filename] = (path, kinds)
                     catalog.widgets.formUnion(kinds.map { PluginWidget(group: group, kind: $0) })
-                } else if filename.hasPrefix("libTheme"), group != ungrouped,
-                          let id = themeID(from: filename) {
-                    if let declared = manifests[manifestKey(directory: dir, group: group)]?.library(named: filename)?.themeID,
+                } else if filename.hasPrefix("libTheme"), let id = themeID(from: filename) {
+                    if group != ungrouped,
+                       let declared = manifests[manifestKey(directory: dir, group: group)]?.library(named: filename)?.themeID,
                        declared != id {
                         Log.note("package manifest declares theme '\(declared)' for '\(filename)', but its filename resolves to '\(id)'")
                         continue
                     }
-                    catalog.themeIDsByGroup[group] = id
+                    // Loose themes count too, so a mixed drop-in folder (or the
+                    // plugin root itself) still gets a bundled-theme default.
+                    if let existing = catalog.themeIDsByGroup[group], existing != id {
+                        Log.note("folder '\(group)' bundles themes '\(existing)' and '\(id)' — keeping '\(existing)'")
+                    } else {
+                        catalog.themeIDsByGroup[group] = id
+                    }
                 }
             }
         }
@@ -162,16 +174,13 @@ enum PluginLoader {
 
     private static func manifestKey(directory: String, group: String) -> String { directory + "/" + group }
 
-    /// An explicit build/run selection limits widget dylibs to its matching package.
-    /// With no selection, independent packages compose freely.
-    static func belongsToSelectedFolder(_ relativePath: String, selectedFolder: String?,
-                                        themedFolders: Set<String> = [], restrictAll: Bool = true) -> Bool {
+    /// The selected package is the sole source of widget and theme dylibs.
+    static func belongsToSelectedFolder(_ relativePath: String, selectedFolder: String?) -> Bool {
         guard let selectedFolder else { return true }
         let filename = (relativePath as NSString).lastPathComponent
         guard filename.hasPrefix("libWidget") || filename.hasPrefix("libTheme") else { return true }
         let group = folder(for: relativePath)
-        if group.caseInsensitiveCompare(selectedFolder) == .orderedSame { return true }
-        return !restrictAll && !themedFolders.contains(group)
+        return group.caseInsensitiveCompare(selectedFolder) == .orderedSame
     }
 
     private static func themeID(from filename: String) -> String? {
@@ -247,26 +256,37 @@ enum PluginLoader {
 
     static func runTestSuite() -> Int32 {
         let registrar = Registrar()
-        _ = load(into: registrar)
-        let suite = ProcessInfo.processInfo.environment["WIXELS_WIDGET_SUITE"]
-        let expected: Set<String> = switch suite {
-        case "Macos": ["clock", "stats", "weather", "nowplaying", "reminders", "poster"]
-        default: ["sys", "nowplaying", "disk-snail", "pet", "plant", "quotes",
-                  "frog", "clock", "stats", "owl", "weather", "poster"]
-        }
+        let catalog = load(into: registrar)
         let loaded = Set(registrar.specs.keys).union(registrar.themedSpecs.keys)
-        let missing = expected.subtracting(loaded)
-        guard missing.isEmpty else {
-            print("FAIL bundled plugins did not load: \(missing.sorted().joined(separator: ", "))")
+        let loadedBareKinds = Set(loaded.map(Registrar.bareKind))
+        let selected = ProcessInfo.processInfo.environment["WIXELS_WIDGET_SUITE"]
+            .flatMap { $0.isEmpty ? nil : $0 } ?? Config.selectedPluginFolder()
+        guard !loadedBareKinds.isEmpty || !registrar.themes.isEmpty else {
+            print("FAIL no extensions loaded")
             return 1
         }
-        let expectedThemes = suite.map { Set([$0.lowercased()]) } ?? Set(["macos", "cynaberii"])
-        let missingThemes = expectedThemes.subtracting(registrar.themes.keys)
-        guard missingThemes.isEmpty else {
-            print("FAIL bundled themes did not load: \(missingThemes.sorted().joined(separator: ", "))")
-            return 1
+        let expected: (widgets: Set<String>, themes: Set<String>)? = switch selected?.lowercased() {
+        case "cynaberii": (["sys", "nowplaying", "disk-snail", "pet", "plant", "quotes",
+                             "frog", "clock", "stats", "owl", "weather", "poster"], ["cynaberii"])
+        case "macos": (["clock", "stats", "weather", "nowplaying", "reminders", "poster"], ["macos"])
+        default: nil
         }
-        print("PASS \(expected.count) bundled plugins and \(expectedThemes.count) theme(s) load at runtime")
+        if let expected {
+            let activeWidgets = Set(catalog.widgets.filter {
+                guard let selected else { return false }
+                return $0.group.caseInsensitiveCompare(selected) == .orderedSame
+            }.map(\.kind))
+            guard loadedBareKinds == expected.widgets,
+                  activeWidgets == expected.widgets,
+                  Set(registrar.themes.keys) == expected.themes,
+                  catalog.widgets.allSatisfy({ widget in
+                      selected.map { widget.group.caseInsensitiveCompare($0) == .orderedSame } ?? false
+                  }) else {
+                print("FAIL selected package '\(selected ?? "(default)")' loaded widgets \(loadedBareKinds.sorted()) themes \(registrar.themes.keys.sorted()) catalog \(catalog.widgets.map(\.group).sorted())")
+                return 1
+            }
+        }
+        print("PASS \(loadedBareKinds.count) widget(s) and \(registrar.themes.count) theme(s) from the selected package")
         return 0
     }
 }

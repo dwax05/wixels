@@ -3,7 +3,7 @@ import WixelsKit
 import MacosWidgetPresentation
 struct NativeReminders: ThemeableWixel {
  let source: RemindersSource; static let kind = "reminders"; static let refresh: RefreshPolicy = .interval(15); static let interactive = true
- static func spec() -> ThemedWidgetSpec { .init(widget: Self.self, defaultPlacement: .init(anchor: .topLeft, offset: .init(width: 28, height: -64), size: .init(width: 260, height: 160), align: .topLeading, sizing: .fitContent), previews: [.init("Due next", sample: .init(authorization: .authorized, items: [.init(title: "Send release notes", date: .now), .init(title: "Water plants", date: .now.addingTimeInterval(86_400))])), .init("Empty", sample: .init(authorization: .authorized)), .init("Permission", sample: .init(authorization: .denied))]) { _, _ in .init(source: .init()) } }
+ static func spec() -> ThemedWidgetSpec { .init(widget: Self.self, defaultPlacement: .init(anchor: .topLeft, offset: .init(width: 28, height: -64), size: .init(width: 260, height: 160), align: .topLeading, sizing: .fitContent), namespace: "macos", previews: [.init("Due next", sample: .init(authorization: .authorized, items: [.init(title: "Send release notes", date: .now), .init(title: "Water plants", date: .now.addingTimeInterval(86_400))])), .init("Empty", sample: .init(authorization: .authorized)), .init("Permission", sample: .init(authorization: .denied))]) { _, _ in .init(source: .init()) } }
  func sample() async -> AgendaSnapshot { await source.read() }
  func render(_ s: AgendaSnapshot, _ theme: ThemeContext) -> some View {
      NativeRemindersView(snapshot: s, theme: theme, complete: { await source.complete(id: $0) },

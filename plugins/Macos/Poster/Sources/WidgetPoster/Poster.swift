@@ -14,7 +14,7 @@ struct NativePoster: ThemeableWixel {
         .init(widget: Self.self,
               defaultPlacement: .init(anchor: .topRight, offset: .init(width: -24, height: -210),
                                       size: .init(width: 260, height: 410), align: .topTrailing, sizing: .fitContent),
-              previews: [
+              namespace: "macos", previews: [
                 .init("Playing", sample: .init(hasTrack: true, title: "A Kind of Magic", artist: "Queen",
                     album: "A Kind of Magic", duration: "4:24", playing: true, art: "")),
                 .init("Empty", sample: .idle),
