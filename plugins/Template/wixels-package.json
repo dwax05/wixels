@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "widget-template",
-  "wixelsKit": { "minInclusive": "0.1.6", "maxExclusive": "0.2.0" },
+  "wixelsKit": { "minInclusive": "0.2.0", "maxExclusive": "0.3.0" },
   "libraries": [
     { "file": "libWidgetTemplate.dylib", "kind": "template" }
   ]

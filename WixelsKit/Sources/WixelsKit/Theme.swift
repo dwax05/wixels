@@ -4,7 +4,7 @@ import SwiftUI
 /// The versioned, neutral rendering interface shared by the host and extensions.
 /// Concrete themes declare the range they support in their package manifest.
 public enum WixelsKitAPI {
-    public static let version = "0.1.6"
+    public static let version = "0.2.0"
 }
 
 public struct ThemeManifest: Sendable, Equatable {

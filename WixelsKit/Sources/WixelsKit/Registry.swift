@@ -43,12 +43,6 @@ public struct ThemedWidgetSpec: Sendable {
     /// The registry key: `"namespace/kind"` when namespaced, the bare kind otherwise.
     public var canonicalKind: String { namespace.map { "\($0)/\(kind)" } ?? kind }
 
-    /// Preserves the original plugin ABI for already-compiled themed widgets.
-    public init<W: ThemeableWixel>(widget: W.Type, defaultPlacement: Placement,
-                                   build: @escaping @MainActor @Sendable (Services, Options) -> W) {
-        self.init(widget: widget, defaultPlacement: defaultPlacement, previews: [], build: build)
-    }
-
     public init<W: ThemeableWixel>(widget: W.Type, defaultPlacement: Placement,
                                    namespace: String? = nil,
                                    previews: [WidgetPreview<W.Sample>] = [],

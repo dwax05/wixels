@@ -77,12 +77,6 @@ public protocol WidgetTicker: AnyObject {
     func tick() async
 }
 
-public extension WidgetTicker {
-    /// Preserves source compatibility for custom ticker implementations.
-    var hasSample: Bool { true }
-    func setContentUpdateHandler(_ handler: @escaping () -> Void) {}
-}
-
 /// A widget erased for the host: its ticker and its view share one model instance,
 /// so a scheduler tick republishes the sample the view is observing. `erase(_:)`
 /// below is the only way to make one.

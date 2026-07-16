@@ -138,12 +138,12 @@ enum SchedulerTests {
         let registrar = Registrar()
         registrar.add(testTheme(id: "macos", rounded: true, color: RGB(10, 20, 30)))
         registrar.add(TestThemeable.spec())
-        registrar.add(LegacyThemeable.spec())
+        registrar.add(DefaultsThemeable.spec())
         let previews = registrar.registeredPreviews(services: Services(), themeID: "macos")
         try check(previews.count == 1 && previews.first?.kind == "test" && previews.first?.name == "Fixture",
                   "preview registration enumerates deterministic themed fixtures")
-        try check(!previews.contains { $0.kind == "legacy" },
-                  "legacy themed specs remain source-compatible with no previews")
+        try check(!previews.contains { $0.kind == "no-previews" },
+                  "themed specs registered without previews contribute none")
     }
 
     private static func connectivityDoesNotTreatHiddenSSIDAsOffline() throws {
@@ -203,8 +203,8 @@ private struct TestThemeable: ThemeableWixel {
     func render(_ sample: Int, _ theme: ThemeContext) -> some View { Text("\(sample)") }
 }
 
-private struct LegacyThemeable: ThemeableWixel {
-    static let kind = "legacy"
+private struct DefaultsThemeable: ThemeableWixel {
+    static let kind = "no-previews"
     static let refresh: RefreshPolicy = .idleStatic
     static func spec() -> ThemedWidgetSpec {
         ThemedWidgetSpec(widget: Self.self,
@@ -244,5 +244,7 @@ private final class FakeTicker: WidgetTicker {
         self.active = active
     }
 
+    var hasSample: Bool { true }
+    func setContentUpdateHandler(_ handler: @escaping () -> Void) {}
     func tick() async { tickCount += 1 }
 }
