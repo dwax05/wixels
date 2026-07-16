@@ -246,14 +246,27 @@ enum Config {
         var result: [Int: String] = [:], used = Set<String>()
         for row in rows {
             guard let id = row.id else { continue }
-            result[row.index] = id; used.insert(id)
+            if used.contains(id) {
+                // A user-edited duplicate would silently collapse to one layout
+                // record; rename the later occurrence deterministically instead.
+                let candidate = disambiguate(id, used: used)
+                Log.note("duplicate widget id '\(id)' — renaming to '\(candidate)'")
+                result[row.index] = candidate; used.insert(candidate)
+            } else {
+                result[row.index] = id; used.insert(id)
+            }
         }
         for row in rows where row.id == nil {
-            var n = 1, candidate = row.kind
-            while used.contains(candidate) { n += 1; candidate = "\(row.kind)-\(n)" }
+            let candidate = disambiguate(row.kind, used: used)
             result[row.index] = candidate; used.insert(candidate)
         }
         return result
+    }
+
+    private static func disambiguate(_ base: String, used: Set<String>) -> String {
+        var n = 1, candidate = base
+        while used.contains(candidate) { n += 1; candidate = "\(base)-\(n)" }
+        return candidate
     }
 
     /// Assign deterministic IDs within each plugin group. Existing IDs are never
@@ -276,7 +289,7 @@ enum Config {
               let text = try? String(contentsOfFile: path, encoding: .utf8),
               let table = try? TOMLTable(string: text),
               let widgets = table["widget"]?.array else { return }
-        var generatedIDs: [Int: String] = [:], migratedIndexes = Set<Int>()
+        var generatedIDs: [Int: String] = [:], migratedIndexes = Set<Int>(), renamedIndexes = Set<Int>()
         for write in writes {
             // A missing ID is the migration marker. Repeating this idempotent
             // pass also repairs a desktop.toml restored after its layout file.
@@ -288,7 +301,10 @@ enum Config {
                 rows.append((index, kind, validID(row["id"]?.string)))
             }
             let assigned = assignIDs(rows: rows)
-            for row in rows where row.id == nil { generatedIDs[row.index] = assigned[row.index] }
+            for row in rows where assigned[row.index] != row.id {
+                generatedIDs[row.index] = assigned[row.index]
+                if row.id != nil { renamedIndexes.insert(row.index) }
+            }
             LayoutStore.write(group: write.group, records: write.records)
         }
         // TOMLKit intentionally exposes no public table-key deletion API. Remove
@@ -306,6 +322,7 @@ enum Config {
             // Sub-tables like [widget.options] may hold keys named like placement
             // fields; only the widget row's own top-level assignments migrate.
             if trimmed.hasPrefix("[") { inWidgetRoot = false }
+            if inWidgetRoot, renamedIndexes.contains(widgetIndex), trimmed.hasPrefix("id =") { continue }
             if inWidgetRoot, migratedIndexes.contains(widgetIndex), ["anchor =", "offset =", "size =", "zBoost =", "align ="].contains(where: trimmed.hasPrefix) { continue }
             output.append(String(line))
         }

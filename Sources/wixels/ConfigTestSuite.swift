@@ -279,6 +279,35 @@ func runConfigTestSuite() -> Int32 {
                    "first group layout save assigns IDs and migrates legacy placement fields")
         try expect(migrated.entries[0].options.int("size") == 7,
                    "migration keeps option keys that share placement field names")
+
+        try """
+        [[widget]]
+        kind = "clock"
+        folder = "\(cynGroup)"
+        id = "clock"
+        [[widget]]
+        kind = "clock"
+        folder = "\(cynGroup)"
+        id = "clock"
+        """.write(toFile: tempPath, atomically: true, encoding: .utf8)
+        let duplicated = Config.load()
+        let dupGroups = [0: cynGroup, 1: cynGroup]
+        let dupIDs = Config.stableIDs(entries: duplicated.entries, groups: dupGroups)
+        try expect(dupIDs == [0: "clock", 1: "clock-2"],
+                   "duplicate explicit ids are renamed deterministically")
+        let first = Placement(anchor: .topLeft, offset: .init(width: 1, height: 2))
+        let second = Placement(anchor: .topLeft, offset: .init(width: 3, height: 4))
+        Config.writeLayouts([
+            .init(group: cynGroup, records: [
+                .init(configIndex: 0, id: dupIDs[0]!, placement: first),
+                .init(configIndex: 1, id: dupIDs[1]!, placement: second),
+            ]),
+        ])
+        let dupLayouts = LayoutStore.load(group: cynGroup)
+        try expect(dupLayouts["clock"]?.apply(to: fallback).offset == first.offset &&
+                   dupLayouts["clock-2"]?.apply(to: fallback).offset == second.offset &&
+                   Config.load().entries.map(\.id) == ["clock", "clock-2"],
+                   "duplicate explicit ids keep distinct placements and are rewritten on disk")
         print("PASS config suite")
         return 0
     } catch {
