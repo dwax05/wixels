@@ -21,7 +21,7 @@ The template is in [themes/Template](../themes/Template).
 
 ## Register a theme
 
-The entry point creates one `ThemeDefinition`:
+The entry point creates one complete `ThemeDefinition`:
 
 ```swift
 import WixelsKit
@@ -34,8 +34,8 @@ public func wixels_register(_ context: UnsafeMutableRawPointer) {
 
     registrar.add(ThemeDefinition(
         manifest: .init(id: "my-theme", name: "My Theme"),
-        tokens: ThemeDefinition.macos.tokens,
-        defaultPalette: ThemeDefinition.macos.defaultPalette
+        tokens: /* define every semantic color, font, and recipe here */,
+        defaultPalette: /* define every palette value here */
     ))
 }
 ```
@@ -43,7 +43,7 @@ public func wixels_register(_ context: UnsafeMutableRawPointer) {
 Use a stable lowercase kebab-case ID, such as `my-theme`. The display name is what
 users see conceptually; the ID is what they put in `desktop.toml`.
 
-Start by copying the macOS tokens and palette, then change the values you want. The
+Start by copying the complete template definition, then change the values you want. The
 token set covers semantic colors, typography, card fill/shape/border/shadow, media
 shape, and spacing density. A theme must provide a complete `defaultPalette` (background,
 foreground, and color0–color15): it is used for any palette component the user's

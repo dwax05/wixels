@@ -26,12 +26,14 @@ final class PreviewGalleryController: NSObject, NSWindowDelegate {
 private struct PreviewGallery: View {
     let registrar: Registrar; let services: Services
     @State private var themeID = "macos"
+    private var themes: [ThemeDefinition] { registrar.themes.values.sorted { $0.manifest.name < $1.manifest.name } }
     var previews: [RegisteredWidgetPreview] { registrar.registeredPreviews(services: services, themeID: themeID) }
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Picker("Theme", selection: $themeID) {
-                Text("macOS").tag("macos")
-                Text("Cynaberii").tag("cynaberii")
+                ForEach(themes, id: \.manifest.id) { theme in
+                    Text(theme.manifest.name).tag(theme.manifest.id)
+                }
             }.pickerStyle(.segmented).frame(width: 220)
             ScrollView { LazyVGrid(columns: [GridItem(.adaptive(minimum: 280), spacing: 22)], spacing: 22) {
                 ForEach(Array(previews.enumerated()), id: \.offset) { _, preview in
