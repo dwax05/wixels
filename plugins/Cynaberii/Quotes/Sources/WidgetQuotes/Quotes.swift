@@ -7,14 +7,12 @@
 // overridable with WIXELS_QUOTES. Missing file → the hardcoded fallback line.
 // idleStatic: no polling, redraws on palette change.
 
-import AppKit
 import SwiftUI
 import WixelsKit
 
 /// Loads the curated quote list once; hands out random picks. Immutable → Sendable.
 struct QuoteSource: Sendable {
     let quotes: [String]
-    let tallest: String     // the line with the most wrapped height — sizes the bubble
 
     static let maxWidth: CGFloat = 196   // bubble text wrap width
     static let fallback = ["the horrors persist but so do i"]
@@ -30,28 +28,10 @@ struct QuoteSource: Sendable {
         } else {
             quotes = Self.fallback
         }
-        tallest = Self.tallestLine(quotes)
     }
 
     func random() -> String { quotes.randomElement() ?? Self.fallback[0] }
 
-    /// Which quote wraps to the greatest height at the bubble width — measured once
-    /// with TextKit. The absolute value needn't match SwiftUI's layout exactly; the
-    /// ranking does, so the winner sizes the bubble correctly when SwiftUI draws it.
-    private static func tallestLine(_ quotes: [String]) -> String {
-        let font = NSFont(name: "Silkscreen", size: 11)
-            ?? .monospacedSystemFont(ofSize: 11, weight: .regular)
-        let bound = CGSize(width: maxWidth, height: .greatestFiniteMagnitude)
-        var best = quotes.first ?? Self.fallback[0]
-        var bestH: CGFloat = 0
-        for q in quotes {
-            let attr = NSAttributedString(string: "“ " + q, attributes: [.font: font])
-            let h = attr.boundingRect(with: bound,
-                                      options: [.usesLineFragmentOrigin, .usesFontLeading]).height
-            if h > bestH { bestH = h; best = q }
-        }
-        return best
-    }
 }
 
 struct Quotes: ThemeableWixel {
@@ -92,11 +72,11 @@ private struct QuotesView: View {
     var body: some View {
         let text = quote ?? initial
 
-        // Reserve the height of the tallest quote so the bubble never resizes on
-        // reroll: lay out only that one line invisibly (picked once at load) and
-        // show the current line on top.
+        // Reserve the largest active-theme layout so rerolling cannot resize the
+        // bubble. SwiftUI measures these with ThemeContext's font; no widget-owned
+        // concrete typeface leaks into the package.
         return ZStack(alignment: .topLeading) {
-            line(source.tallest).opacity(0)
+            ForEach(source.quotes, id: \.self) { line($0).opacity(0) }
             line(text)
         }
             .themedCard(theme, insets: .init(top: 12, leading: 14, bottom: 12, trailing: 14))

@@ -17,31 +17,31 @@
 import SwiftUI
 import WixelsKit
 
-struct TemplateWidget: Wixel {
+struct TemplateWidget: ThemeableWixel {
     static let kind = "template"                       // stable id — used in desktop.toml
     static let refresh: RefreshPolicy = .idleStatic    // or .interval(seconds) to poll
 
-    static func spec() -> WidgetSpec {
-        WidgetSpec(kind: kind,
+    static func spec() -> ThemedWidgetSpec {
+        ThemedWidgetSpec(widget: Self.self,
             defaultPlacement: .init(anchor: .center,
                                     size: .init(width: 150, height: 70)),
-            build: { _, _ in erase(TemplateWidget()) })
+            build: { _, _ in TemplateWidget() })
     }
 
     /// Fetch the metric. Runs off the main actor — do I/O here, never touch the UI.
     func sample() async -> String { "hello" }
 
     /// Draw it. Pure function of (Sample, Palette) — snapshot-testable, no state.
-    func render(_ s: String, _ p: Palette) -> some View { TemplateView(text: s, p: p) }
+    func render(_ s: String, _ theme: ThemeContext) -> some View { TemplateView(text: s, theme: theme) }
 }
 
 private struct TemplateView: View {
     let text: String
-    let p: Palette
+    let theme: ThemeContext
     var body: some View {
         Text(text)
-            .font(.pixel(12))
-            .foregroundColor(p.c(4).color)   // recolours live with the wal palette
-            .pane(p)
+            .font(theme.font(.body))
+            .foregroundColor(theme.color(.accent))
+            .themedCard(theme)
     }
 }
