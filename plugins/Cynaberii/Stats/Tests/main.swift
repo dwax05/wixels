@@ -11,14 +11,14 @@ struct WidgetStatsTests {
         accents[4] = border
         let palette = Palette(background: RGB(15, 12, 30), foreground: RGB(225, 220, 240),
                               accents: accents)
-        let theme = ThemeContext(definition: .cynaberii, palette: palette)
+        let theme = ThemeContext(definition: fixtureTheme(id: "pixel", rectangle: true), palette: palette)
         let stats = StatsView(s: .init(cpu: 0, mem: 42, battery: 100,
                                       charging: false, plugged: false), theme: theme)
         let intrinsic = ImageRenderer(content: stats)
         intrinsic.scale = 1
         let macosStats = StatsView(s: .init(cpu: 0, mem: 42, battery: 100,
                                            charging: false, plugged: false),
-                                   theme: ThemeContext(definition: .macos, palette: palette))
+                                   theme: ThemeContext(definition: fixtureTheme(id: "native", rectangle: false), palette: palette))
         let macosIntrinsic = ImageRenderer(content: macosStats)
         macosIntrinsic.scale = 1
         let placement = Stats.spec().defaultPlacement.size
@@ -69,6 +69,17 @@ struct WidgetStatsTests {
                abs(c.greenComponent * 255 - target.g) < 24 &&
                abs(c.blueComponent * 255 - target.b) < 24 && c.alphaComponent > 0.9
     }
+}
+
+private func fixtureTheme(id: String, rectangle: Bool) -> ThemeDefinition {
+    let color: ThemeColor = .rgb(RGB(160, 150, 200))
+    return ThemeDefinition(manifest: .init(id: id, name: id), tokens: .init(
+        colors: .init(background: color, foreground: color, secondary: color, accent: color, alternateAccent: color,
+            positive: color, warning: color, negative: color, muted: color, border: color, shadow: color),
+        typography: .init(title: .init(size: 12), body: .init(size: 11), label: .init(size: 10), caption: .init(size: 9), symbol: .init(size: 12)),
+        card: .init(fill: .color(color), shape: rectangle ? .rectangle : .rounded(16), borderWidth: rectangle ? 4 : 1,
+            shadowX: rectangle ? 4 : 0, shadowY: rectangle ? 4 : 0), mediaShape: rectangle ? .rectangle : .rounded(8)),
+        defaultPalette: .fallback)
 }
 
 private struct Failure: Error, CustomStringConvertible {

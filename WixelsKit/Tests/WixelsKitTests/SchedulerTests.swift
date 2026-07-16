@@ -29,15 +29,14 @@ enum SchedulerTests {
     private static func universalThemeRegistryResolvesAndPreservesPlacement() throws {
         let registrar = Registrar()
         registrar.add(TestThemeable.spec())
-        let native = ThemeDefinition(manifest: .init(id: "native", name: "Native"),
-                                     tokens: ThemeDefinition.macos.tokens,
-                                     defaultPalette: ThemeDefinition.macos.defaultPalette)
+        let fallbackTheme = testTheme(id: "macos", rounded: true, color: RGB(10, 20, 30))
+        let native = testTheme(id: "native", rounded: true, color: RGB(10, 20, 30))
+        let pixel = testTheme(id: "pixel", rounded: false, color: RGB(40, 50, 60))
+        registrar.add(fallbackTheme)
         try check(native.tokens.card.shape == .rounded(16), "macos theme rounds cards")
         try check(native.tokens.mediaShape == .rounded(8), "macos theme rounds media")
-        try check(ThemeDefinition.cynaberii.tokens.card.shape == .rectangle,
-                  "cynaberii theme keeps cards square")
-        try check(ThemeDefinition.cynaberii.tokens.mediaShape == .rectangle,
-                  "cynaberii theme keeps media square")
+        try check(pixel.tokens.card.shape == .rectangle, "data-defined pixel theme keeps cards square")
+        try check(pixel.tokens.mediaShape == .rectangle, "data-defined pixel theme keeps media square")
         registrar.add(native)
         let resolved = registrar.resolveThemed(kind: "test", themeID: "native",
                                                services: Services(), options: .empty)
@@ -46,9 +45,8 @@ enum SchedulerTests {
         let fallback = registrar.resolveThemed(kind: "test", themeID: "missing",
                                                services: Services(), options: .empty)
         try check(fallback?.themeID == "macos", "unknown theme falls back to macos")
-        registrar.add(ThemeDefinition(manifest: .init(id: "native", name: "Duplicate"),
-                                      tokens: ThemeDefinition.cynaberii.tokens,
-                                      defaultPalette: ThemeDefinition.cynaberii.defaultPalette))
+        registrar.add(pixel)
+        registrar.add(testTheme(id: "native", rounded: false, color: RGB(40, 50, 60)))
         try check(registrar.resolveTheme("native") == native, "duplicate theme keeps first registration")
     }
 
@@ -121,21 +119,24 @@ enum SchedulerTests {
             overrides: .init(background: RGB(hex: "666666"), accents: [RGB(hex: "777777")]))
         defer { store.stop() }
 
-        let macos = store.resolvedPalette(for: .macos)
-        let cynaberii = store.resolvedPalette(for: .cynaberii)
+        let macosTheme = testTheme(id: "macos", rounded: true, color: RGB(10, 20, 30))
+        let pixelTheme = testTheme(id: "pixel", rounded: false, color: RGB(40, 50, 60))
+        let macos = store.resolvedPalette(for: macosTheme)
+        let cynaberii = store.resolvedPalette(for: pixelTheme)
         try check(macos.background == RGB(hex: "666666") && macos.foreground == RGB(hex: "444444") &&
                   macos.c(0) == RGB(hex: "777777"),
                   "TOML palette values override environment-selected file values")
-        try check(macos.c(1) == ThemeDefinition.macos.defaultPalette.c(1),
+        try check(macos.c(1) == macosTheme.defaultPalette.c(1),
                   "environment-selected file replaces configured file rather than composing with it")
-        try check(macos.c(2) == ThemeDefinition.macos.defaultPalette.c(2) &&
-                  cynaberii.c(2) == ThemeDefinition.cynaberii.defaultPalette.c(2) &&
+        try check(macos.c(2) == macosTheme.defaultPalette.c(2) &&
+                  cynaberii.c(2) == pixelTheme.defaultPalette.c(2) &&
                   macos.c(2) != cynaberii.c(2),
                   "partial palettes fall back per value to each widget theme")
     }
 
     private static func previewRegistryUsesFixturesAndKeepsLegacySpecsCompatible() throws {
         let registrar = Registrar()
+        registrar.add(testTheme(id: "macos", rounded: true, color: RGB(10, 20, 30)))
         registrar.add(TestThemeable.spec())
         registrar.add(LegacyThemeable.spec())
         let previews = registrar.registeredPreviews(services: Services(), themeID: "macos")
@@ -174,6 +175,19 @@ enum SchedulerTests {
         guard condition() else { throw TestFailure(message) }
         print("PASS \(message)")
     }
+}
+
+private func testTheme(id: String, rounded: Bool, color: RGB) -> ThemeDefinition {
+    let source: ThemeColor = .rgb(color)
+    return ThemeDefinition(manifest: .init(id: id, name: id), tokens: .init(
+        colors: .init(background: source, foreground: source, secondary: source, accent: source,
+            alternateAccent: source, positive: source, warning: source, negative: source,
+            muted: source, border: source, shadow: source),
+        typography: .init(title: .init(size: 12), body: .init(size: 11), label: .init(size: 10),
+            caption: .init(size: 9), symbol: .init(size: 12)),
+        card: .init(fill: .color(source), shape: rounded ? .rounded(16) : .rectangle),
+        mediaShape: rounded ? .rounded(8) : .rectangle),
+        defaultPalette: .init(background: color, foreground: color, accents: Array(repeating: color, count: 16)))
 }
 
 private struct TestThemeable: ThemeableWixel {

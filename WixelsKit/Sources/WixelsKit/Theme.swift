@@ -1,6 +1,12 @@
 import AppKit
 import SwiftUI
 
+/// The versioned, neutral rendering interface shared by the host and extensions.
+/// Concrete themes declare the range they support in their package manifest.
+public enum WixelsKitAPI {
+    public static let version = "0.1.6"
+}
+
 public struct ThemeManifest: Sendable, Equatable {
     public let id: String
     public let name: String
@@ -148,42 +154,6 @@ public struct ThemeContext: Sendable {
         case .shadow: .black
         }
     }
-}
-
-private extension ThemeTypography {
-    static let macos = ThemeTypography(title: .init(design: .rounded, weight: .semibold, size: 18),
-        body: .init(size: 13), label: .init(weight: .medium, size: 11), caption: .init(size: 9),
-        symbol: .init(weight: .semibold, size: 16))
-    static let cynaberii = ThemeTypography(title: .init(.custom("Silkscreen"), weight: .bold, size: 12),
-        body: .init(.custom("Silkscreen"), size: 11), label: .init(.custom("Silkscreen"), size: 9),
-        caption: .init(.custom("Silkscreen"), size: 8), symbol: .init(.custom("Silkscreen"), size: 16))
-}
-public extension ThemeDefinition {
-    static let macos = ThemeDefinition(manifest: .init(id: "macos", name: "macOS"), tokens: .init(
-        colors: .init(background: .system(.background), foreground: .system(.foreground), secondary: .system(.secondary),
-            accent: .system(.accent), alternateAccent: .system(.alternateAccent), positive: .system(.positive),
-            warning: .system(.warning), negative: .system(.negative), muted: .system(.muted), border: .system(.border), shadow: .system(.shadow)),
-        typography: .macos, card: .init(fill: .regularMaterial, shape: .rounded(16), borderWidth: 0.5,
-            shadowBlur: 8, shadowY: 3, opacity: 0.96), mediaShape: .rounded(8),
-        metrics: .init(spacingScale: 1, paddingScale: 1)),
-        defaultPalette: .init(background: RGB(242, 242, 247), foreground: RGB(28, 28, 30), accents: [
-            RGB(28, 28, 30), RGB(255, 59, 48), RGB(52, 199, 89), RGB(255, 149, 0),
-            RGB(0, 122, 255), RGB(175, 82, 222), RGB(90, 200, 250), RGB(142, 142, 147),
-            RGB(99, 99, 102), RGB(72, 72, 74), RGB(142, 142, 147), RGB(174, 174, 178),
-            RGB(199, 199, 204), RGB(209, 209, 214), RGB(229, 229, 234), RGB(242, 242, 247)
-        ]))
-    static let cynaberii = ThemeDefinition(manifest: .init(id: "cynaberii", name: "Cynaberii"), tokens: .init(
-        colors: .init(background: .pywalBackground, foreground: .pywalForeground, secondary: .pywal(6), accent: .pywal(4),
-            alternateAccent: .pywal(3), positive: .pywal(2), warning: .pywal(3), negative: .pywal(1), muted: .pywal(8),
-            border: .pywal(4), shadow: .pywal(3)), typography: .cynaberii,
-        card: .init(fill: .color(.pywalBackground), shape: .rectangle, borderWidth: 4, shadowX: 4, shadowY: 4),
-        mediaShape: .rectangle, metrics: .init(spacingScale: 1, paddingScale: 1)),
-        defaultPalette: .init(background: RGB(22, 16, 39), foreground: RGB(196, 195, 201), accents: [
-            RGB(22, 16, 39), RGB(137, 108, 156), RGB(135, 118, 171), RGB(126, 129, 174),
-            RGB(151, 145, 174), RGB(167, 149, 211), RGB(192, 191, 197), RGB(196, 195, 201),
-            RGB(101, 95, 117), RGB(137, 108, 156), RGB(135, 118, 171), RGB(126, 129, 174),
-            RGB(151, 145, 174), RGB(167, 149, 211), RGB(192, 191, 197), RGB(196, 195, 201)
-        ]))
 }
 
 private struct ThemeCardModifier: ViewModifier {

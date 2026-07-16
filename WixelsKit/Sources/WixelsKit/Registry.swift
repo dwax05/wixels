@@ -87,7 +87,7 @@ public final class Registrar: @unchecked Sendable {
     public private(set) var themedSpecs: [String: ThemedWidgetSpec] = [:]
     public private(set) var themes: [String: ThemeDefinition] = [:]
     private var warnedThemeIDs = Set<String>()
-    public init() { themes[ThemeDefinition.macos.manifest.id] = .macos }
+    public init() {}
 
     private func logDuplicate(_ kind: String) {
         Log.note("duplicate widget kind '\(kind)' — keeping the first")
@@ -116,20 +116,21 @@ public final class Registrar: @unchecked Sendable {
         themes[theme.manifest.id] = theme
     }
 
-    public func resolveTheme(_ id: String?) -> ThemeDefinition {
-        guard let id, let theme = themes[id] else {
-            if let id, id != "macos", warnedThemeIDs.insert(id).inserted {
-                Log.note("unknown theme '\(id)' — using macos")
-            }
-            return themes["macos"] ?? .macos
+    public func resolveTheme(_ id: String?) -> ThemeDefinition? {
+        if let id, let theme = themes[id] { return theme }
+        if let id, warnedThemeIDs.insert(id).inserted {
+            Log.note("unknown theme '\(id)' — using macos when available")
         }
-        return theme
+        return themes["macos"]
     }
 
     @MainActor public func resolveThemed(kind: String, themeID: String?, services: Services,
                                          options: Options) -> ResolvedThemedWidget? {
         guard let spec = themedSpecs[kind] else { return nil }
-        let theme = resolveTheme(themeID)
+        guard let theme = resolveTheme(themeID) else {
+            Log.note("no 'macos' fallback theme is loaded — cannot mount themed widget '\(kind)'")
+            return nil
+        }
         return ResolvedThemedWidget(widget: spec.build(services, options, theme),
             placement: spec.defaultPlacement, themeID: theme.manifest.id)
     }
@@ -137,7 +138,7 @@ public final class Registrar: @unchecked Sendable {
     /// Developer tooling only. Production mounting never evaluates preview fixtures.
     @MainActor public func registeredPreviews(services: Services,
                                                themeID: String? = nil) -> [RegisteredWidgetPreview] {
-        let theme = resolveTheme(themeID)
+        guard let theme = resolveTheme(themeID) else { return [] }
         return themedSpecs.keys.sorted().flatMap { themedSpecs[$0]!.previews(services, theme) }
     }
 }
