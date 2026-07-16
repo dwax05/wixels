@@ -58,9 +58,16 @@ for binary in "${widget_dylibs[@]}" "${theme_dylibs[@]}"; do
     codesign --verify --strict --verbose=2 "$binary"
 done
 
+MANIFEST="$ROOT/build/release/plugins/$SUITE/wixels-package.json"
+if [ ! -f "$MANIFEST" ]; then
+    echo "error: $SUITE build output is missing wixels-package.json" >&2
+    exit 1
+fi
+
 mkdir -p "$PLUGINS/$SUITE"
 cp "${widget_dylibs[@]}" "$PLUGINS/$SUITE/"
 cp "${theme_dylibs[@]}" "$PLUGINS/$SUITE/"
+cp "$MANIFEST" "$PLUGINS/$SUITE/wixels-package.json"
 cp "$ROOT/LICENSE" "$PACK_ROOT/LICENSE"
 cp "$ROOT/THIRD_PARTY_NOTICES.md" "$PACK_ROOT/THIRD_PARTY_NOTICES.md"
 cp "$ROOT/Vendor/MediaRemoteAdapter/LICENSE" "$PACK_ROOT/MediaRemoteAdapter-LICENSE"
@@ -75,13 +82,15 @@ mkdir -p "$EXTRACTED"
 ditto -x -k "$ZIP" "$EXTRACTED"
 EXTRACTED_ROOT="$EXTRACTED/$PACK_NAME"
 if [ "$(find "$EXTRACTED_ROOT/plugins" -maxdepth 2 -name 'libWidget*.dylib' | wc -l | tr -d ' ')" -ne "$EXPECTED_PLUGINS" ] ||
-   [ "$(find "$EXTRACTED_ROOT/plugins/$SUITE" -maxdepth 1 -name 'libTheme*.dylib' | wc -l | tr -d ' ')" -ne 1 ]; then
+   [ "$(find "$EXTRACTED_ROOT/plugins/$SUITE" -maxdepth 1 -name 'libTheme*.dylib' | wc -l | tr -d ' ')" -ne 1 ] ||
+   [ ! -f "$EXTRACTED_ROOT/plugins/$SUITE/wixels-package.json" ]; then
     echo "error: archive lost extension payload" >&2
     exit 1
 fi
 mkdir -p "$STAGING/plugin-test-home/.config/wixels"
 mkdir -p "$STAGING/plugin-test-home/.config/wixels/plugins/$SUITE"
 cp "$EXTRACTED_ROOT/plugins/$SUITE"/*.dylib "$STAGING/plugin-test-home/.config/wixels/plugins/$SUITE/"
+cp "$EXTRACTED_ROOT/plugins/$SUITE/wixels-package.json" "$STAGING/plugin-test-home/.config/wixels/plugins/$SUITE/"
 HOME="$STAGING/plugin-test-home" WIXELS_WIDGET_SUITE="$SUITE" "$RELEASE/wixels" --plugin-tests
 
 mkdir -p "$ROOT/dist"

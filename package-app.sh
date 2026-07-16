@@ -54,7 +54,8 @@ theme_dylibs=("$PLUGIN_BUILD/$BUNDLED_SUITE"/libTheme*.dylib)
 expected_plugins=0
 expected_themes=0
 if [ -n "$BUNDLED_SUITE" ]; then
-    expected_plugins="$(find "$ROOT/plugins/$BUNDLED_SUITE" -mindepth 2 -maxdepth 2 -name Package.swift | wc -l | tr -d ' ')"
+    # Support is a shared library package, not a widget; build-plugins.sh skips it.
+    expected_plugins="$(find "$ROOT/plugins/$BUNDLED_SUITE" -mindepth 2 -maxdepth 2 -name Package.swift ! -path '*/Support/*' | wc -l | tr -d ' ')"
     expected_themes=1
 fi
 if [ "${#widget_dylibs[@]}" -ne "$expected_plugins" ]; then
@@ -77,6 +78,11 @@ if [ "$expected_plugins" -gt 0 ]; then
     mkdir -p "$PLUGINS/$BUNDLED_SUITE"
     cp "${widget_dylibs[@]}" "$PLUGINS/$BUNDLED_SUITE/"
     cp "${theme_dylibs[@]}" "$PLUGINS/$BUNDLED_SUITE/"
+    if [ ! -f "$PLUGIN_BUILD/$BUNDLED_SUITE/wixels-package.json" ]; then
+        echo "error: $BUNDLED_SUITE build output is missing wixels-package.json" >&2
+        exit 1
+    fi
+    cp "$PLUGIN_BUILD/$BUNDLED_SUITE/wixels-package.json" "$PLUGINS/$BUNDLED_SUITE/"
 fi
 cp -R "$ROOT/build/release/MediaRemoteAdapter.framework" "$ADAPTER_FRAMEWORK"
 cp "$ROOT/build/release/mediaremote-adapter.pl" "$ADAPTER_SCRIPT"
