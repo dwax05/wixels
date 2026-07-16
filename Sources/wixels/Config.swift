@@ -194,27 +194,7 @@ enum Config {
     }
 
     private static func placement(from t: TOMLTable) -> PlacementOverride {
-        var o = PlacementOverride()
-        if let a = t["anchor"]?.string { o.anchor = WixelsKit.Anchor(rawValue: a) }
-        if let off = t["offset"]?.array, off.count >= 2 {
-            let values = Array(off)
-            if let x = number(values[0]), let y = number(values[1]) {
-                o.offset = CGSize(width: x, height: y)
-            } else {
-                Log.note("invalid widget offset — ignoring")
-            }
-        }
-        if let sz = t["size"]?.array, sz.count >= 2 {
-            let values = Array(sz)
-            if let width = number(values[0]), let height = number(values[1]) {
-                o.size = CGSize(width: width, height: height)
-            } else {
-                Log.note("invalid widget size — ignoring")
-            }
-        }
-        if let z = t["zBoost"]?.int { o.zBoost = z }
-        if let al = t["align"]?.string { o.align = alignment(al) }
-        return o
+        PlacementTOML.placement(from: t, logging: true)
     }
 
     private static func options(from t: TOMLTable) -> Options {
@@ -423,23 +403,5 @@ enum Config {
             Log.note("failed to write active plugin folder to \(path)")
         }
     }
-
-    private static func number(_ value: TOMLValueConvertible) -> CGFloat? {
-        if let number = value.double, number.isFinite { return CGFloat(number) }
-        if let integer = value.int { return CGFloat(integer) }
-        return nil
-    }
-
-    /// The TOML `align` strings, mapped like `Anchor(rawValue:)` does for anchors —
-    /// a lookup table rather than a hand-written switch (SwiftUI's `Alignment` isn't
-    /// `RawRepresentable`, so this is the nearest equivalent).
-    private static let alignments: [String: Alignment] = [
-        "leading": .leading, "trailing": .trailing, "center": .center,
-        "top": .top, "bottom": .bottom,
-        "topLeading": .topLeading, "topTrailing": .topTrailing,
-        "bottomLeading": .bottomLeading, "bottomTrailing": .bottomTrailing,
-    ]
-
-    private static func alignment(_ s: String) -> Alignment? { alignments[s] }
 
 }
