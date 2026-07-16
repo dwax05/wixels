@@ -45,21 +45,21 @@ func runPluginLoaderPathTestSuite() -> Int32 {
             print("FAIL plugin loader sorting/filtering")
             return 1
         }
-        guard PluginLoader.folder(for: "Cynaberii/nested/libWidgetNested.dylib") == "Cynaberii" &&
-              PluginLoader.folder(for: "libWidgetA.dylib") == PluginLoader.ungrouped else {
+        guard PluginLoader.group(for: "Cynaberii/nested/libWidgetNested.dylib") == "Cynaberii" &&
+              PluginLoader.group(for: "libWidgetA.dylib") == PluginLoader.ungrouped else {
             print("FAIL plugin loader folder grouping")
             return 1
         }
-        guard PluginLoader.folder(for: "mypackage/libThemeCynaberii.dylib") == "mypackage" &&
-              PluginLoader.folder(for: "mypackage/libWidgetPet.dylib") == "mypackage" &&
-              PluginLoader.belongsToSelectedFolder("mypackage/libThemeCynaberii.dylib", selectedFolder: "mypackage") &&
-              PluginLoader.belongsToSelectedFolder("mypackage/libWidgetPet.dylib", selectedFolder: "mypackage") else {
+        guard PluginLoader.group(for: "mypackage/libThemeCynaberii.dylib") == "mypackage" &&
+              PluginLoader.group(for: "mypackage/libWidgetPet.dylib") == "mypackage" &&
+              PluginLoader.belongsToSelectedGroup("mypackage/libThemeCynaberii.dylib", selectedGroup: "mypackage") &&
+              PluginLoader.belongsToSelectedGroup("mypackage/libWidgetPet.dylib", selectedGroup: "mypackage") else {
             print("FAIL package theme and widget grouping")
             return 1
         }
-        guard PluginLoader.belongsToSelectedFolder("MyDesk/libWidgetClock.dylib", selectedFolder: "mydesk") &&
-              !PluginLoader.belongsToSelectedFolder("Elsewhere/libWidgetClock.dylib", selectedFolder: "MyDesk") &&
-              !PluginLoader.belongsToSelectedFolder("Elsewhere/libThemeElsewhere.dylib", selectedFolder: "MyDesk") else {
+        guard PluginLoader.belongsToSelectedGroup("MyDesk/libWidgetClock.dylib", selectedGroup: "mydesk") &&
+              !PluginLoader.belongsToSelectedGroup("Elsewhere/libWidgetClock.dylib", selectedGroup: "MyDesk") &&
+              !PluginLoader.belongsToSelectedGroup("Elsewhere/libThemeElsewhere.dylib", selectedGroup: "MyDesk") else {
             print("FAIL plugin loader folder selection")
             return 1
         }

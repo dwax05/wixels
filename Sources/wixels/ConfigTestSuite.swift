@@ -96,7 +96,7 @@ func runConfigTestSuite() -> Int32 {
                    menu[2].sourceIndex == nil && menu[3].sourceIndex == nil,
                    "menu groups configured and unconfigured registered widgets")
 
-        let duplicateFolders = try Config.parse("""
+        let duplicateGroups = try Config.parse("""
         [[widget]]
         kind = "clock"
         folder = "Home"
@@ -105,14 +105,14 @@ func runConfigTestSuite() -> Int32 {
         folder = "Work"
         enabled = false
         """)
-        let duplicateMenu = widgetMenuEntries(config: duplicateFolders, available: [
+        let duplicateMenu = widgetMenuEntries(config: duplicateGroups, available: [
             PluginWidget(group: "Home", kind: "clock"),
             PluginWidget(group: "Work", kind: "clock"),
         ])
         try expect(duplicateMenu.map(\.group) == ["Home", "Work"] &&
                    duplicateMenu.map(\.label) == ["clock", "clock"] &&
                    duplicateMenu.map(\.enabled) == [true, false],
-                   "same plugin kind in separate folders remains separate")
+                   "same plugin kind in separate groups remains separate")
 
         // The registrar may key a themed spec as "suite/poster", but catalog and
         // durable package identities must stay bare so a menu toggle creates a row
@@ -178,7 +178,7 @@ func runConfigTestSuite() -> Int32 {
         """.write(toFile: tempPath, atomically: true, encoding: .utf8)
         setenv("WIXELS_CONFIG", tempPath, 1)
         defer { unsetenv("WIXELS_CONFIG"); try? FileManager.default.removeItem(atPath: tempPath) }
-        Config.writeWidgetToggle(sourceIndex: 0, kind: "clock", folder: "Cynaberii", enabled: false)
+        Config.writeWidgetToggle(sourceIndex: 0, kind: "clock", group: "Cynaberii", enabled: false)
         let preserved = try String(contentsOfFile: tempPath, encoding: .utf8)
         let preservedConfig = Config.load()
         try expect(preserved.contains("enabled = false") && preserved.contains("mystery = 'keep me'") &&
@@ -186,7 +186,7 @@ func runConfigTestSuite() -> Int32 {
                    preservedConfig.entries[0].options.int("answer") == 42,
                    "disabling preserves placement, options, and unknown fields")
 
-        Config.writeWidgetToggle(sourceIndex: nil, kind: "owl", folder: "Cynaberii", enabled: true)
+        Config.writeWidgetToggle(sourceIndex: nil, kind: "owl", group: "Cynaberii", enabled: true)
         let appended = try String(contentsOfFile: tempPath, encoding: .utf8)
         try expect(appended.contains("kind = 'owl'") && appended.contains("folder = 'Cynaberii'") &&
                    !appended.contains("enabled = true"),
@@ -199,8 +199,8 @@ func runConfigTestSuite() -> Int32 {
             throw ConfigTestFailure(description: "bare package widget missing from menu")
         }
         Config.writeWidgetToggle(sourceIndex: uncheckedPoster.sourceIndex, kind: uncheckedPoster.kind,
-                                 folder: uncheckedPoster.group, enabled: true)
-        let toggled = Config.load().entries.first { $0.kind == "poster" && $0.folder == "MyPackage" }
+                                 group: uncheckedPoster.group, enabled: true)
+        let toggled = Config.load().entries.first { $0.kind == "poster" && $0.group == "MyPackage" }
         try expect(toggled?.enabled == true,
                    "toggling a bare catalog widget creates a mountable package row")
 
@@ -219,8 +219,8 @@ func runConfigTestSuite() -> Int32 {
                    exclusive.entries.first(where: { $0.kind == "clock" })?.options.int("answer") == 42,
                    "folder selection enables selected kinds while preserving fields and theme overrides")
 
-        Config.writeActivePluginFolder("Cynaberii")
-        let activeFolder = Config.selectedPluginFolder()
+        Config.writeActivePluginGroup("Cynaberii")
+        let activeFolder = Config.selectedPluginGroup()
         try expect(activeFolder == "Cynaberii",
                    "active plugin folder persists independently of widget settings")
 

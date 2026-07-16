@@ -47,7 +47,7 @@ func runLayoutTestSuite() -> Int32 {
     for entry in config.entries {
         guard entry.enabled else { continue }
         let bareKind = Registrar.bareKind(entry.kind)
-        guard let group = entry.folder ?? catalog.widgets.filter({ $0.kind == bareKind }).map(\.group).min(),
+        guard let group = entry.group ?? catalog.widgets.filter({ $0.kind == bareKind }).map(\.group).min(),
               catalog.widgets.contains(PluginWidget(group: group, kind: bareKind)) else { continue }
         if let spec = registrar.specs[entry.kind] {
             host.mount(spec.build(services, entry.options), placement: spec.defaultPlacement,

@@ -10,22 +10,22 @@ import WixelsKit
 @MainActor
 final class StatusBarController: NSObject, NSMenuDelegate {
     private var host: WidgetHost
-    private var folders: Set<String>
+    private var groups: Set<String>
     private let toggleHandler: (WidgetInfo) -> Void
     private let selectGroupHandler: (String) -> Void
     private let item: NSStatusItem
 
     /// Point at the host built by a live config reload. The menu is rebuilt on open
     /// (`menuNeedsUpdate`), so nothing else needs updating and the status item is reused.
-    func rebind(host: WidgetHost, folders: Set<String>? = nil) {
+    func rebind(host: WidgetHost, groups: Set<String>? = nil) {
         self.host = host
-        if let folders { self.folders = folders }
+        if let groups { self.groups = groups }
     }
 
-    init(host: WidgetHost, folders: Set<String>, toggleHandler: @escaping (WidgetInfo) -> Void,
+    init(host: WidgetHost, groups: Set<String>, toggleHandler: @escaping (WidgetInfo) -> Void,
          selectGroupHandler: @escaping (String) -> Void) {
         self.host = host
-        self.folders = folders
+        self.groups = groups
         self.toggleHandler = toggleHandler
         self.selectGroupHandler = selectGroupHandler
         self.item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -45,31 +45,31 @@ final class StatusBarController: NSObject, NSMenuDelegate {
             menu.addItem(empty)
         }
         let entriesByGroup = Dictionary(grouping: infos, by: \.group)
-        for group in folders.union(entriesByGroup.keys).sorted() {
+        for group in groups.union(entriesByGroup.keys).sorted() {
             let entries = entriesByGroup[group] ?? []
-            let folder = NSMenu(title: group)
+            let submenu = NSMenu(title: group)
             let exclusive = NSMenuItem(title: "Load Only This Package",
-                                       action: #selector(loadOnlyPackage(_:)), keyEquivalent: "")
+                                       action: #selector(loadOnlyGroup(_:)), keyEquivalent: "")
             exclusive.representedObject = group
             exclusive.target = self
-            folder.addItem(exclusive)
-            if !entries.isEmpty { folder.addItem(.separator()) }
+            submenu.addItem(exclusive)
+            if !entries.isEmpty { submenu.addItem(.separator()) }
             for info in entries {
                 let row = NSMenuItem(title: info.label,
                                      action: #selector(toggle(_:)), keyEquivalent: "")
                 row.state = info.enabled ? .on : .off
                 row.representedObject = info
                 row.target = self
-                folder.addItem(row)
+                submenu.addItem(row)
             }
             if entries.isEmpty {
                 let unavailable = NSMenuItem(title: "Widgets load after selecting this package", action: nil, keyEquivalent: "")
                 unavailable.isEnabled = false
-                folder.addItem(unavailable)
+                submenu.addItem(unavailable)
             }
-            let folderItem = NSMenuItem(title: group, action: nil, keyEquivalent: "")
-            folderItem.submenu = folder
-            menu.addItem(folderItem)
+            let groupItem = NSMenuItem(title: group, action: nil, keyEquivalent: "")
+            groupItem.submenu = submenu
+            menu.addItem(groupItem)
         }
         menu.addItem(.separator())
         let openPlugins = NSMenuItem(title: "Open Packages Folder…",
@@ -101,7 +101,7 @@ final class StatusBarController: NSObject, NSMenuDelegate {
         toggleHandler(info)
     }
 
-    @objc private func loadOnlyPackage(_ sender: NSMenuItem) {
+    @objc private func loadOnlyGroup(_ sender: NSMenuItem) {
         guard let group = sender.representedObject as? String else { return }
         selectGroupHandler(group)
     }

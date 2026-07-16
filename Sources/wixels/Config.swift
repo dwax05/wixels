@@ -29,7 +29,7 @@ struct ConfigEntry {
     /// the first time their group is laid out.
     let id: String?
     /// Nil is a legacy row; it resolves to the first loaded folder for its kind.
-    let folder: String?
+    let group: String?
     let enabled: Bool
     let theme: String?
     let placement: PlacementOverride
@@ -92,12 +92,12 @@ enum Config {
                       default: "~/.config/wixels/desktop.toml")
     }
 
-    static func selectedPluginFolder() -> String? {
+    static func selectedPluginGroup() -> String? {
         guard let text = try? String(contentsOfFile: path, encoding: .utf8),
               let table = try? TOMLTable(string: text) else { return nil }
-        guard let folder = table["plugins"]?.table?["activeFolder"]?.string,
-              !folder.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
-        return folder
+        guard let group = table["plugins"]?.table?["activeFolder"]?.string,
+              !group.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        return group
     }
 
     /// Load the config file, falling back to the bundled default when it's missing
@@ -120,7 +120,7 @@ enum Config {
         let theme = validThemeID(table["theme"]?.table?["default"]?.string)
         let entries: [ConfigEntry] = (table["widget"]?.array).map(Array.init)?.enumerated().compactMap { index, item in
             guard let t = item.table, let kind = t["kind"]?.string.flatMap(validKind) else { return nil }
-            return ConfigEntry(sourceIndex: index, kind: kind, id: validID(t["id"]?.string), folder: folder(from: t), enabled: enabled(from: t),
+            return ConfigEntry(sourceIndex: index, kind: kind, id: validID(t["id"]?.string), group: group(from: t), enabled: enabled(from: t),
                                theme: validThemeID(t["theme"]?.string),
                                placement: placement(from: t), options: options(from: t))
         } ?? []
@@ -176,21 +176,21 @@ enum Config {
         return bool
     }
 
-    private static func folder(from t: TOMLTable) -> String? { folder(from: t, key: "folder") }
+    private static func group(from t: TOMLTable) -> String? { group(from: t, key: "folder") }
 
     private static func validID(_ id: String?) -> String? {
         guard let id = id?.trimmingCharacters(in: .whitespacesAndNewlines), !id.isEmpty else { return nil }
         return id
     }
 
-    private static func folder(from t: TOMLTable?, key: String) -> String? {
+    private static func group(from t: TOMLTable?, key: String) -> String? {
         guard let value = t?[key] else { return nil }
-        guard let folder = value.string?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !folder.isEmpty else {
+        guard let group = value.string?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !group.isEmpty else {
             Log.note("invalid widget folder — ignoring")
             return nil
         }
-        return folder
+        return group
     }
 
     private static func placement(from t: TOMLTable) -> PlacementOverride {
@@ -312,14 +312,14 @@ enum Config {
         }
     }
 
-    private static func rowGroup(_ row: TOMLTable) -> String { folder(from: row) ?? "Ungrouped" }
+    private static func rowGroup(_ row: TOMLTable) -> String { group(from: row) ?? "Ungrouped" }
     private static func rowBelongsToGroup(_ row: TOMLTable, index: Int, write: LayoutWrite) -> Bool {
         write.memberIndexes.contains(index) || rowGroup(row) == write.group
     }
 
     /// Persist a menu toggle while retaining every other field in the source TOML.
     /// An absent registered kind gets only a kind field, inheriting global defaults.
-    static func writeWidgetToggle(sourceIndex: Int?, kind: String, folder: String, enabled: Bool) {
+    static func writeWidgetToggle(sourceIndex: Int?, kind: String, group: String, enabled: Bool) {
         guard let text = try? String(contentsOfFile: path, encoding: .utf8),
               let table = try? TOMLTable(string: text) else {
             Log.note("failed to read config before toggling '\(kind)'")
@@ -333,7 +333,7 @@ enum Config {
         } else {
             let widget = TOMLTable()
             widget["kind"] = kind
-            widget["folder"] = folder
+            widget["folder"] = group
             if !enabled { widget["enabled"] = false }
             if let widgets = table["widget"]?.array {
                 widgets.append(widget)
@@ -385,7 +385,7 @@ enum Config {
         }
     }
 
-    static func writeActivePluginFolder(_ folder: String) {
+    static func writeActivePluginGroup(_ group: String) {
         guard let text = try? String(contentsOfFile: path, encoding: .utf8),
               let table = try? TOMLTable(string: text) else {
             Log.note("failed to read config before selecting plugin folder")
@@ -394,7 +394,7 @@ enum Config {
         let plugins: TOMLTable
         if let existing = table["plugins"]?.table { plugins = existing }
         else { plugins = TOMLTable() }
-        plugins["activeFolder"] = folder
+        plugins["activeFolder"] = group
         table["plugins"] = plugins
         let out = table.convert(to: .toml)
         if (try? out.write(toFile: path, atomically: true, encoding: .utf8)) == nil {

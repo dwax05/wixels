@@ -25,7 +25,7 @@ func widgetMenuEntries(config: LoadedConfig, available: Set<PluginWidget>) -> [W
     for entry in config.entries {
         // The catalog records bare kinds; a namespaced config row matches on its tail.
         let bareKind = Registrar.bareKind(entry.kind)
-        guard let group = entry.folder ?? fallbackGroups[bareKind] else { continue }
+        guard let group = entry.group ?? fallbackGroups[bareKind] else { continue }
         let identity = PluginWidget(group: group, kind: bareKind)
         guard available.contains(identity) else { continue }
         let n = (seen[identity] ?? 0) + 1
@@ -77,16 +77,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // dlopen so approved widgets load in this launch without a restart.
         let excluded = Quarantine.resolveUserExtensions()
         pluginCatalog = PluginLoader.load(into: registrar, excluding: excluded)
-        activateSelectedFolderIfNeeded()
+        activateSelectedGroupIfNeeded()
         if registrar.specs.isEmpty && registrar.themedSpecs.isEmpty {
             Log.note("no widgets installed — install a compatible extension pack in ~/.config/wixels, then restart")
         }
 
         buildSession()
-        self.statusBar = StatusBarController(host: host, folders: pluginCatalog.folders) { [weak self] info in
+        self.statusBar = StatusBarController(host: host, groups: pluginCatalog.groups) { [weak self] info in
             self?.toggle(info)
         } selectGroupHandler: { [weak self] group in
-            self?.loadOnlyPackage(group: group)
+            self?.loadOnlyGroup(group: group)
         }
         // Watch the layout file and rebuild live when it changes (WIXELS_CONFIG honoured).
         self.watcher = ConfigWatcher(path: Config.path) { [weak self] in self?.reload() }
@@ -103,7 +103,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let menuEntries = makeMenuEntries(config: cfg)
         let groupsByIndex = Dictionary(uniqueKeysWithValues: cfg.entries.compactMap { entry in
             let bareKind = Registrar.bareKind(entry.kind)
-            let group = entry.folder ?? pluginCatalog.widgets.filter { $0.kind == bareKind }.map(\.group).min()
+            let group = entry.group ?? pluginCatalog.widgets.filter { $0.kind == bareKind }.map(\.group).min()
             return group.map { (entry.sourceIndex, $0) }
         })
         let idsByIndex = Config.stableIDs(entries: cfg.entries, groups: groupsByIndex)
@@ -131,7 +131,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard entry.enabled else { continue }
             let group = groupsByIndex[entry.sourceIndex]
             guard let group, pluginCatalog.widgets.contains(PluginWidget(group: group, kind: Registrar.bareKind(entry.kind))) else {
-                Log.note("no widget for folder '\(entry.folder ?? "(none)")' and kind '\(entry.kind)'")
+                Log.note("no widget for folder '\(entry.group ?? "(none)")' and kind '\(entry.kind)'")
                 continue
             }
             // Per-widget precedence: config `theme` > the folder's bundled theme
@@ -190,7 +190,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // Theme resolution is automatic (folder theme > global),
             // so a toggle never pins the folder theme onto the row.
             Config.writeWidgetToggle(sourceIndex: info.sourceIndex, kind: info.kind,
-                                     folder: info.group, enabled: on)
+                                     group: info.group, enabled: on)
         }
         host.shutdown()
         buildSession()
@@ -212,22 +212,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Persist one package as the active set, then relaunch so conflicting widget
     /// dylibs and its bundled theme are resolved as a unit.
-    private func loadOnlyPackage(group: String) {
+    private func loadOnlyGroup(group: String) {
         guard let host else { return }
         let (selected, configured) = Self.groupSelection(group: group, infos: host.widgetInfos())
         watcher?.ignoringWrites {
             if !selected.isEmpty {
                 Config.writeExclusiveWidgetGroup(selected: selected, configured: configured)
             }
-            Config.writeActivePluginFolder(group)
+            Config.writeActivePluginGroup(group)
         }
         restart()
     }
 
     /// After a restart, the selected package's widgets are now available to the
     /// catalog. Enable them before mounting; their bundled theme resolves at mount.
-    private func activateSelectedFolderIfNeeded() {
-        guard let group = Config.selectedPluginFolder() else { return }
+    private func activateSelectedGroupIfNeeded() {
+        guard let group = Config.selectedPluginGroup() else { return }
         let (selected, configured) = Self.groupSelection(group: group,
                                                          infos: makeMenuEntries(config: Config.load()))
         guard !selected.isEmpty else { return }
@@ -243,7 +243,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             try process.run()
             NSApp.terminate(nil)
         } catch {
-            Log.note("could not restart after switching plugin folder: \(error)")
+            Log.note("could not restart after switching plugin group: \(error)")
         }
     }
 
