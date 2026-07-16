@@ -57,11 +57,9 @@ func runLayoutTestSuite() -> Int32 {
     }
 
     host.run()
-    pumpWindowServer()
-    let before = host.layoutSnapshot()
+    let before = settledLayoutSnapshot(host)
     host.resetLayout()
-    pumpWindowServer()
-    let after = host.layoutSnapshot()
+    let after = settledLayoutSnapshot(host)
 
     guard !before.isEmpty, before.count == after.count else {
         print("FAIL layout reset mounted \(before.count) production windows before and \(after.count) after")
@@ -92,6 +90,21 @@ func runLayoutTestSuite() -> Int32 {
     print(failures == 0 ? "PASS production layout reset suite" :
           "FAIL production layout reset suite: \(failures) shifted window(s)")
     return failures == 0 ? 0 : 1
+}
+
+/// Pump until every fit-content window has finished measuring. A single fixed
+/// pump races the slowest widget's first sample on large real-world configs,
+/// misreading its late resize as a reset-induced move.
+@MainActor
+private func settledLayoutSnapshot(_ host: WidgetHost) -> [LayoutSnapshot] {
+    var snapshot = host.layoutSnapshot()
+    for _ in 0..<8 {
+        pumpWindowServer()
+        let next = host.layoutSnapshot()
+        if next == snapshot { return next }
+        snapshot = next
+    }
+    return snapshot
 }
 
 private func preservesAnchor(_ anchor: WixelsKit.Anchor, before: NSRect, after: NSRect) -> Bool {
