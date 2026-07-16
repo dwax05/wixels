@@ -18,10 +18,20 @@ struct WeatherInfo: Equatable, Sendable {
 
 /// Fetches weather over the network; caches location + station in memory across
 /// ticks. Called serially by the scheduler (every 15 min), so plain mutation is safe.
+/// Location additionally persists to disk (`~/.config/wixels/weather-location.txt`)
+/// so a restart doesn't re-hit ipinfo.io's tight unauthenticated rate limit — a
+/// desktop widget's location is effectively static, so caching indefinitely is fine.
 final class WeatherSource: DataSource, @unchecked Sendable {
     private var loc: (lat: String, lon: String)?
     private var station: String?
     private let ua = "wixels-weather"
+    private let ipinfoToken: String?
+
+    init(ipinfoToken: String? = nil) { self.ipinfoToken = ipinfoToken }
+
+    private static var cachePath: String {
+        (NSHomeDirectory() as NSString).appendingPathComponent(".config/wixels/weather-location.txt")
+    }
 
     func read() async -> WeatherInfo {
         guard let (lat, lon) = await location() else { return .unknown }
@@ -44,15 +54,31 @@ final class WeatherSource: DataSource, @unchecked Sendable {
 
     private func location() async -> (String, String)? {
         if let loc { return loc }
-        guard let u = URL(string: "https://ipinfo.io/loc"),
-              let (data, _) = try? await URLSession.shared.data(from: u),
-              let text = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
-              text.contains(",") else { return nil }
+        if let cached = Self.cachedLocation() { loc = cached; return cached }
+        let endpoint = ipinfoToken.map { "https://ipinfo.io/loc?token=\($0)" } ?? "https://ipinfo.io/loc"
+        guard let u = URL(string: endpoint),
+              let (data, response) = try? await URLSession.shared.data(from: u),
+              (response as? HTTPURLResponse)?.statusCode == 200,
+              let text = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) else { return nil }
         let parts = text.split(separator: ",")
-        guard parts.count >= 2 else { return nil }
+        guard parts.count == 2, Double(parts[0]) != nil, Double(parts[1]) != nil else { return nil }
         let l = (String(parts[0]), String(parts[1]))
         loc = l
+        Self.cacheLocation(l)
         return l
+    }
+
+    private static func cachedLocation() -> (String, String)? {
+        guard let text = try? String(contentsOfFile: cachePath, encoding: .utf8) else { return nil }
+        let parts = text.trimmingCharacters(in: .whitespacesAndNewlines).split(separator: ",")
+        guard parts.count == 2, Double(parts[0]) != nil, Double(parts[1]) != nil else { return nil }
+        return (String(parts[0]), String(parts[1]))
+    }
+
+    private static func cacheLocation(_ l: (lat: String, lon: String)) {
+        let dir = (cachePath as NSString).deletingLastPathComponent
+        try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        try? "\(l.lat),\(l.lon)".write(toFile: cachePath, atomically: true, encoding: .utf8)
     }
 
     // MARK: NWS (primary)
@@ -140,7 +166,7 @@ struct Weather: ThemeableWixel {
             defaultPlacement: .init(anchor: .topRight, offset: .init(width: 0, height: -60),
                                     size: .init(width: 130, height: 150), align: .trailing),
             namespace: "cynaberii",
-            build: { _, _ in Weather(source: WeatherSource()) })
+            build: { _, options in Weather(source: WeatherSource(ipinfoToken: options.string("ipinfoToken"))) })
     }
     static let refresh: RefreshPolicy = .interval(900)   // 15 min; data effectively cached
     static let px: CGFloat = 5
