@@ -319,7 +319,7 @@ enum Config {
 
     /// Persist a menu toggle while retaining every other field in the source TOML.
     /// An absent registered kind gets only a kind field, inheriting global defaults.
-    static func writeWidgetToggle(sourceIndex: Int?, kind: String, folder: String, themeID: String?, enabled: Bool) {
+    static func writeWidgetToggle(sourceIndex: Int?, kind: String, folder: String, enabled: Bool) {
         guard let text = try? String(contentsOfFile: path, encoding: .utf8),
               let table = try? TOMLTable(string: text) else {
             Log.note("failed to read config before toggling '\(kind)'")
@@ -330,12 +330,10 @@ enum Config {
            sourceIndex >= 0, sourceIndex < widgets.count,
             let widget = widgets[sourceIndex]?.table {
             widget["enabled"] = enabled
-            if enabled, let themeID { widget["theme"] = themeID }
         } else {
             let widget = TOMLTable()
             widget["kind"] = kind
             widget["folder"] = folder
-            if let themeID { widget["theme"] = themeID }
             if !enabled { widget["enabled"] = false }
             if let widgets = table["widget"]?.array {
                 widgets.append(widget)

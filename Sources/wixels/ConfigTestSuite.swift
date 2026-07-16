@@ -178,7 +178,7 @@ func runConfigTestSuite() -> Int32 {
         """.write(toFile: tempPath, atomically: true, encoding: .utf8)
         setenv("WIXELS_CONFIG", tempPath, 1)
         defer { unsetenv("WIXELS_CONFIG"); try? FileManager.default.removeItem(atPath: tempPath) }
-        Config.writeWidgetToggle(sourceIndex: 0, kind: "clock", folder: "Cynaberii", themeID: "cynaberii", enabled: false)
+        Config.writeWidgetToggle(sourceIndex: 0, kind: "clock", folder: "Cynaberii", enabled: false)
         let preserved = try String(contentsOfFile: tempPath, encoding: .utf8)
         let preservedConfig = Config.load()
         try expect(preserved.contains("enabled = false") && preserved.contains("mystery = 'keep me'") &&
@@ -186,7 +186,7 @@ func runConfigTestSuite() -> Int32 {
                    preservedConfig.entries[0].options.int("answer") == 42,
                    "disabling preserves placement, options, and unknown fields")
 
-        Config.writeWidgetToggle(sourceIndex: nil, kind: "owl", folder: "Cynaberii", themeID: "cynaberii", enabled: true)
+        Config.writeWidgetToggle(sourceIndex: nil, kind: "owl", folder: "Cynaberii", enabled: true)
         let appended = try String(contentsOfFile: tempPath, encoding: .utf8)
         try expect(appended.contains("kind = 'owl'") && appended.contains("folder = 'Cynaberii'") &&
                    !appended.contains("enabled = true"),
@@ -199,7 +199,7 @@ func runConfigTestSuite() -> Int32 {
             throw ConfigTestFailure(description: "bare package widget missing from menu")
         }
         Config.writeWidgetToggle(sourceIndex: uncheckedPoster.sourceIndex, kind: uncheckedPoster.kind,
-                                 folder: uncheckedPoster.group, themeID: nil, enabled: true)
+                                 folder: uncheckedPoster.group, enabled: true)
         let toggled = Config.load().entries.first { $0.kind == "poster" && $0.folder == "MyPackage" }
         try expect(toggled?.enabled == true,
                    "toggling a bare catalog widget creates a mountable package row")

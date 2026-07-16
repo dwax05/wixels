@@ -18,8 +18,7 @@ import WixelsKit
 /// Build the menu catalog from both configured rows and registered plugin kinds.
 /// Configured rows keep their file order (and permit duplicate mounts); registered
 /// kinds missing from the config are appended unchecked so users can enable them.
-func widgetMenuEntries(config: LoadedConfig, available: Set<PluginWidget>,
-                       themeIDsByGroup: [String: String] = [:]) -> [WidgetInfo] {
+func widgetMenuEntries(config: LoadedConfig, available: Set<PluginWidget>) -> [WidgetInfo] {
     let fallbackGroups = Dictionary(grouping: available, by: \.kind).mapValues { $0.map(\.group).min()! }
     var seen: [PluginWidget: Int] = [:]
     var result: [WidgetInfo] = []
@@ -33,15 +32,13 @@ func widgetMenuEntries(config: LoadedConfig, available: Set<PluginWidget>,
         seen[identity] = n
         result.append(WidgetInfo(sourceIndex: entry.sourceIndex, kind: entry.kind,
                                  label: n == 1 ? entry.kind : "\(entry.kind) #\(n)",
-                                 group: group,
-                                 themeID: themeIDsByGroup[group],
-                                 enabled: entry.enabled))
+                                 group: group, enabled: entry.enabled))
     }
     for identity in available.subtracting(Set(seen.keys)).sorted(by: {
         $0.group == $1.group ? $0.kind < $1.kind : $0.group < $1.group
     }) {
         result.append(WidgetInfo(sourceIndex: nil, kind: identity.kind, label: identity.kind,
-                                 group: identity.group, themeID: themeIDsByGroup[identity.group], enabled: false))
+                                 group: identity.group, enabled: false))
     }
     return result
 }
@@ -183,8 +180,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// config file, but are omitted until their plugin is loaded again. Registered
     /// kinds without a row are appended unchecked, ready to be enabled.
     private func makeMenuEntries(config: LoadedConfig) -> [WidgetInfo] {
-        return widgetMenuEntries(config: config, available: pluginCatalog.widgets,
-                                 themeIDsByGroup: pluginCatalog.themeIDsByGroup)
+        return widgetMenuEntries(config: config, available: pluginCatalog.widgets)
     }
 
     private func toggle(_ info: WidgetInfo) {
@@ -192,9 +188,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let on = !info.enabled
         watcher?.ignoringWrites {
             // Theme resolution is automatic (folder theme > global),
-            // so a toggle no longer pins the folder theme onto the row.
+            // so a toggle never pins the folder theme onto the row.
             Config.writeWidgetToggle(sourceIndex: info.sourceIndex, kind: info.kind,
-                                     folder: info.group, themeID: nil, enabled: on)
+                                     folder: info.group, enabled: on)
         }
         host.shutdown()
         buildSession()
