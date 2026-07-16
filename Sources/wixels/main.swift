@@ -201,23 +201,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusBar?.rebind(host: self.host)
     }
 
+    /// The identities in `group` (case-insensitive, matching PluginLoader's folder
+    /// matching) plus every configured row's identity by source index.
+    private static func groupSelection(group: String, infos: [WidgetInfo])
+        -> (selected: Set<PluginWidget>, configured: [Int: PluginWidget]) {
+        let selected = Set(infos.filter {
+            $0.group.caseInsensitiveCompare(group) == .orderedSame
+        }.map(\.identity))
+        let configured = Dictionary(uniqueKeysWithValues: infos.compactMap { info in
+            info.sourceIndex.map { ($0, info.identity) }
+        })
+        return (selected, configured)
+    }
+
     /// Persist one package as the active set, then relaunch so conflicting widget
     /// dylibs and its bundled theme are resolved as a unit.
     private func loadOnlyPackage(group: String) {
         guard let host else { return }
-        let infos = host.widgetInfos()
-        let selected = Set(infos.filter { $0.group == group }.map(\.identity))
-        if selected.isEmpty {
-            watcher?.ignoringWrites { Config.writeActivePluginFolder(group) }
-            restart()
-            return
-        }
-        let configured = Dictionary(uniqueKeysWithValues: infos.compactMap { info in
-            info.sourceIndex.map { ($0, info.identity) }
-        })
-        guard !selected.isEmpty else { return }
+        let (selected, configured) = Self.groupSelection(group: group, infos: host.widgetInfos())
         watcher?.ignoringWrites {
-            Config.writeExclusiveWidgetGroup(selected: selected, configured: configured)
+            if !selected.isEmpty {
+                Config.writeExclusiveWidgetGroup(selected: selected, configured: configured)
+            }
             Config.writeActivePluginFolder(group)
         }
         restart()
@@ -227,12 +232,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// catalog. Enable them before mounting; their bundled theme resolves at mount.
     private func activateSelectedFolderIfNeeded() {
         guard let group = Config.selectedPluginFolder() else { return }
-        let infos = makeMenuEntries(config: Config.load())
-        let selected = Set(infos.filter { $0.group.caseInsensitiveCompare(group) == .orderedSame }.map(\.identity))
+        let (selected, configured) = Self.groupSelection(group: group,
+                                                         infos: makeMenuEntries(config: Config.load()))
         guard !selected.isEmpty else { return }
-        let configured = Dictionary(uniqueKeysWithValues: infos.compactMap { info in
-            info.sourceIndex.map { ($0, info.identity) }
-        })
         Config.writeExclusiveWidgetGroup(selected: selected, configured: configured)
     }
 
