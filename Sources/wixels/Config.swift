@@ -263,13 +263,14 @@ enum Config {
     }
 
     /// Write group-scoped layout files. On a group's first write, migrate its
-    /// desktop rows: assign stable IDs and remove legacy placement fields.
+    /// desktop rows: assign stable IDs and remove legacy placement fields only
+    /// from rows that received a persisted layout record.
     static func writeLayouts(_ writes: [LayoutWrite]) {
         guard !writes.isEmpty,
               let text = try? String(contentsOfFile: path, encoding: .utf8),
               let table = try? TOMLTable(string: text),
               let widgets = table["widget"]?.array else { return }
-        var generatedIDs: [Int: String] = [:], migratedIndexes = Set<Int>(), renamedIndexes = Set<Int>()
+        var generatedIDs: [Int: String] = [:], persistedIndexes = Set<Int>(), renamedIndexes = Set<Int>()
         for write in writes {
             // A missing ID is the migration marker. Repeating this idempotent
             // pass also repairs a desktop.toml restored after its layout file.
@@ -277,7 +278,6 @@ enum Config {
             for index in 0..<widgets.count {
                 guard let row = widgets[index]?.table, rowBelongsToGroup(row, index: index, write: write),
                       let kind = row["kind"]?.string else { continue }
-                migratedIndexes.insert(index)
                 rows.append((index, kind, validID(row["id"]?.string)))
             }
             let assigned = assignIDs(rows: rows)
@@ -285,10 +285,11 @@ enum Config {
                 generatedIDs[row.index] = assigned[row.index]
                 if row.id != nil { renamedIndexes.insert(row.index) }
             }
+            persistedIndexes.formUnion(write.records.map(\.configIndex))
             LayoutStore.write(group: write.group, records: write.records)
         }
         // TOMLKit intentionally exposes no public table-key deletion API. Remove
-        // placement assignments only from widget rows migrated in this write.
+        // placement assignments only from widget rows persisted in this write.
         var output: [String] = [], widgetIndex = -1, inWidgetRoot = false
         for line in table.convert(to: .toml).split(separator: "\n", omittingEmptySubsequences: false) {
             let trimmed = String(line).trimmingCharacters(in: .whitespaces)
@@ -303,7 +304,7 @@ enum Config {
             // fields; only the widget row's own top-level assignments migrate.
             if trimmed.hasPrefix("[") { inWidgetRoot = false }
             if inWidgetRoot, renamedIndexes.contains(widgetIndex), trimmed.hasPrefix("id =") { continue }
-            if inWidgetRoot, migratedIndexes.contains(widgetIndex), ["anchor =", "offset =", "size =", "zBoost =", "align ="].contains(where: trimmed.hasPrefix) { continue }
+            if inWidgetRoot, persistedIndexes.contains(widgetIndex), ["anchor =", "offset =", "size =", "zBoost =", "align ="].contains(where: trimmed.hasPrefix) { continue }
             output.append(String(line))
         }
         let out = output.joined(separator: "\n") + "\n"

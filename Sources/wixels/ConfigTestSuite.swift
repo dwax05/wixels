@@ -280,6 +280,52 @@ func runConfigTestSuite() -> Int32 {
         try expect(migrated.entries[0].options.int("size") == 7,
                    "migration keeps option keys that share placement field names")
 
+        let inactiveGroup = "Inactive-\(ProcessInfo.processInfo.processIdentifier)"
+        try? FileManager.default.removeItem(atPath: LayoutStore.path(for: inactiveGroup))
+        try """
+        [[widget]]
+        kind = "clock"
+        folder = "\(inactiveGroup)"
+        offset = [10, 20]
+        [[widget]]
+        kind = "missing"
+        folder = "\(inactiveGroup)"
+        enabled = false
+        offset = [30, 40]
+        """.write(toFile: tempPath, atomically: true, encoding: .utf8)
+        let inactive = Config.load()
+        let inactiveIDs = Config.stableIDs(entries: inactive.entries, groups: [0: inactiveGroup, 1: inactiveGroup])
+        let activePlacement = Placement(anchor: .topLeft, offset: .init(width: 11, height: 22))
+        Config.writeLayouts([
+            .init(group: inactiveGroup, records: [
+                .init(configIndex: 0, id: inactiveIDs[0]!, placement: activePlacement),
+            ], memberIndexes: [0, 1]),
+        ])
+        let afterPartialMigration = Config.load()
+        try expect(afterPartialMigration.entries.map(\.id) == ["clock", "missing"] &&
+                   afterPartialMigration.entries[0].placement.offset == nil &&
+                   afterPartialMigration.entries[1].placement.apply(to: fallback).offset == CGSize(width: 30, height: 40) &&
+                   LayoutStore.load(group: inactiveGroup)["missing"] == nil,
+                   "partial migration retains an unavailable widget's legacy placement")
+
+        let unavailablePlacement = Placement(anchor: .bottomRight, offset: .init(width: 33, height: 44))
+        Config.writeLayouts([
+            .init(group: inactiveGroup, records: [
+                .init(configIndex: 0, id: inactiveIDs[0]!, placement: activePlacement),
+                .init(configIndex: 1, id: inactiveIDs[1]!, placement: unavailablePlacement),
+            ], memberIndexes: [0, 1]),
+        ])
+        let updatedActivePlacement = Placement(anchor: .topLeft, offset: .init(width: 55, height: 66))
+        Config.writeLayouts([
+            .init(group: inactiveGroup, records: [
+                .init(configIndex: 0, id: inactiveIDs[0]!, placement: updatedActivePlacement),
+            ], memberIndexes: [0, 1]),
+        ])
+        try expect(LayoutStore.load(group: inactiveGroup)["clock"]?.apply(to: fallback).offset == updatedActivePlacement.offset &&
+                   Config.load().entries[1].placement.offset == nil &&
+                   LayoutStore.load(group: inactiveGroup)["missing"]?.apply(to: fallback).offset == unavailablePlacement.offset,
+                   "saving after a widget is disabled merges its record with current mounted state")
+
         try """
         [[widget]]
         kind = "clock"

@@ -28,11 +28,26 @@ enum LayoutStore {
     static func write(group: String, records: [LayoutRecord]) {
         do { try FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true) }
         catch { Log.note("failed to create layouts directory: \(error)"); return }
+        // A save contains only mounted widgets. Keep records for configured rows
+        // that are currently disabled or whose plugin is unavailable; the current
+        // mounted state wins if it has the same stable ID.
+        var placements = load(group: group)
+        for record in records {
+            placements[record.id] = PlacementOverride(anchor: record.placement.anchor,
+                                                       offset: record.placement.offset,
+                                                       size: record.placement.size,
+                                                       zBoost: record.placement.zBoost,
+                                                       align: record.placement.align)
+        }
         var out = "# Wixels layout for \(group)\n# This file is generated; desktop.toml keeps enablement and options.\n\ngroup = \"\(escape(group))\"\n"
-        for record in records.sorted(by: { $0.configIndex < $1.configIndex }) {
-            let p = record.placement
-            out += "\n[[widget]]\nid = \"\(escape(record.id))\"\nanchor = \"\(p.anchor.rawValue)\"\noffset = [\(number(p.offset.width)), \(number(p.offset.height))]\nsize = [\(number(p.size.width)), \(number(p.size.height))]\nzBoost = \(p.zBoost)\n"
-            if let align = PlacementTOML.alignmentName(p.align) { out += "align = \"\(align)\"\n" }
+        for id in placements.keys.sorted() {
+            guard let placement = placements[id] else { continue }
+            out += "\n[[widget]]\nid = \"\(escape(id))\"\n"
+            if let anchor = placement.anchor { out += "anchor = \"\(anchor.rawValue)\"\n" }
+            if let offset = placement.offset { out += "offset = [\(number(offset.width)), \(number(offset.height))]\n" }
+            if let size = placement.size { out += "size = [\(number(size.width)), \(number(size.height))]\n" }
+            if let zBoost = placement.zBoost { out += "zBoost = \(zBoost)\n" }
+            if let align = PlacementTOML.alignmentName(placement.align) { out += "align = \"\(align)\"\n" }
         }
         if (try? out.write(toFile: path(for: group), atomically: true, encoding: .utf8)) == nil { Log.note("failed to write layout for \(group)") }
     }

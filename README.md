@@ -263,24 +263,23 @@ override.
 To create an Apple-silicon app and ZIP for personal sharing:
 
 ```sh
-./package-app.sh 0.1.5
+./package-app.sh 0.2.0
 ```
 
 The output is written to `dist/Wixels.app` and
-`dist/Wixels-0.1.5-arm64.zip`.
+`dist/Wixels-0.2.0-arm64.zip`.
 
 Build the matching public extension assets separately:
 
 ```sh
-./package-extension-pack.sh 0.1.5 Cynaberii
-./package-extension-pack.sh 0.1.5 Macos   # native-look macOS suite
+./package-extension-pack.sh 0.2.0 Cynaberii
+./package-extension-pack.sh 0.2.0 Macos   # native-look macOS suite
 ```
 
-Each run writes `dist/Wixels-<Suite>-0.1.5/` and
-`dist/Wixels-<Suite>-0.1.5-arm64.zip`. Release the host ZIP and the pack ZIPs
-together. See
-[`docs/release-v0.1.5.md`](docs/release-v0.1.5.md) for the release checklist and
-copy-ready notes.
+Each run writes `dist/Wixels-<Suite>-0.2.0/` and
+`dist/Wixels-<Suite>-0.2.0-arm64.zip`. Release all three ZIPs together:
+`Wixels-0.2.0-arm64.zip`, `Wixels-Cynaberii-0.2.0-arm64.zip`, and
+`Wixels-Macos-0.2.0-arm64.zip`.
 
 `swift build` builds only the host. Widget and theme implementations live in
 independent packages under `plugins/<Package>` and `themes/<Package>`, sharing the
@@ -300,7 +299,7 @@ safe even when their widgets use the same filenames.
 
 ```sh
 WIXELS_WIDGET_SUITE=Cynaberii ./build-plugins.sh debug
-./package-extension-pack.sh 0.1.5 Cynaberii
+./package-extension-pack.sh 0.2.0 Cynaberii
 ```
 
 The release app packager always bundles no extensions. The extension packager validates
