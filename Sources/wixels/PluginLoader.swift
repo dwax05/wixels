@@ -27,7 +27,10 @@ struct PluginCatalog {
 enum PluginLoader {
     static let ungrouped = "Ungrouped"
 
-    /// Loads extensions and returns each folder's widgets and bundled theme.
+    /// Loads extensions and returns each package folder's widgets and bundled theme.
+    /// A package is an immediate subfolder of a plugin root; for example,
+    /// `plugins/mypackage/libThemeCynaberii.dylib` and
+    /// `plugins/mypackage/libWidgetPet.dylib` load as one selectable package.
     static func load(into registrar: Registrar, excluding excluded: Set<String> = []) -> PluginCatalog {
         var seen = Set<String>()
         var catalog = PluginCatalog()
@@ -79,8 +82,8 @@ enum PluginLoader {
         return catalog
     }
 
-    /// An explicit build/run selection limits widget dylibs to its matching first
-    /// folder. With no selection, independent folders compose freely.
+    /// An explicit build/run selection limits widget dylibs to its matching package.
+    /// With no selection, independent packages compose freely.
     static func belongsToSelectedFolder(_ relativePath: String, selectedFolder: String?,
                                         themedFolders: Set<String> = [], restrictAll: Bool = true) -> Bool {
         guard let selectedFolder else { return true }
@@ -113,8 +116,8 @@ enum PluginLoader {
         return ((name.hasPrefix("libWidget") || name.hasPrefix("libTheme")) && name.hasSuffix(".dylib"))
     }
 
-    /// A folder means the first path component beneath a plugin root. Deeper
-    /// directories are scanned for convenience but do not create nested menus.
+    /// A package means the first path component beneath a plugin root. Deeper
+    /// directories are scanned for convenience but remain part of that package.
     static func folder(for relativePath: String) -> String {
         let parts = relativePath.split(separator: "/", omittingEmptySubsequences: true)
         return parts.count > 1 ? String(parts[0]) : ungrouped

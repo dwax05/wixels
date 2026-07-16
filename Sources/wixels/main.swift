@@ -77,7 +77,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.statusBar = StatusBarController(host: host, folders: pluginCatalog.folders) { [weak self] info in
             self?.toggle(info)
         } selectGroupHandler: { [weak self] group in
-            self?.enableOnly(group: group)
+            self?.loadOnlyPackage(group: group)
         }
         // Watch the layout file and rebuild live when it changes (WIXELS_CONFIG honoured).
         self.watcher = ConfigWatcher(path: Config.path) { [weak self] in self?.reload() }
@@ -151,7 +151,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusBar?.rebind(host: self.host)
     }
 
-    private func enableOnly(group: String) {
+    /// Persist one package as the active set, then relaunch so conflicting widget
+    /// dylibs and its bundled theme are resolved as a unit.
+    private func loadOnlyPackage(group: String) {
         guard let host else { return }
         let infos = host.widgetInfos()
         let selected = Set(infos.filter { $0.group == group }.map(\.identity))
@@ -174,7 +176,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         restart()
     }
 
-    /// After a restart, the selected folder's widgets are now available to the
+    /// After a restart, the selected package's widgets are now available to the
     /// catalog. Enable them and apply their bundled theme before mounting.
     private func activateSelectedFolderIfNeeded() {
         guard let group = Config.selectedPluginFolder() else { return }

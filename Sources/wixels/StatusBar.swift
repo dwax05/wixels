@@ -48,8 +48,8 @@ final class StatusBarController: NSObject, NSMenuDelegate {
         for group in folders.union(entriesByGroup.keys).sorted() {
             let entries = entriesByGroup[group] ?? []
             let folder = NSMenu(title: group)
-            let exclusive = NSMenuItem(title: "Enable Only This Folder",
-                                       action: #selector(enableOnly(_:)), keyEquivalent: "")
+            let exclusive = NSMenuItem(title: "Load Only This Package",
+                                       action: #selector(loadOnlyPackage(_:)), keyEquivalent: "")
             exclusive.representedObject = group
             exclusive.target = self
             folder.addItem(exclusive)
@@ -63,7 +63,7 @@ final class StatusBarController: NSObject, NSMenuDelegate {
                 folder.addItem(row)
             }
             if entries.isEmpty {
-                let unavailable = NSMenuItem(title: "Widgets load after switching folders", action: nil, keyEquivalent: "")
+                let unavailable = NSMenuItem(title: "Widgets load after selecting this package", action: nil, keyEquivalent: "")
                 unavailable.isEnabled = false
                 folder.addItem(unavailable)
             }
@@ -72,7 +72,7 @@ final class StatusBarController: NSObject, NSMenuDelegate {
             menu.addItem(folderItem)
         }
         menu.addItem(.separator())
-        let openPlugins = NSMenuItem(title: "Open Plugin Folder…",
+        let openPlugins = NSMenuItem(title: "Open Packages Folder…",
                                      action: #selector(openPluginFolder(_:)),
                                      keyEquivalent: "")
         openPlugins.target = self
@@ -101,7 +101,7 @@ final class StatusBarController: NSObject, NSMenuDelegate {
         toggleHandler(info)
     }
 
-    @objc private func enableOnly(_ sender: NSMenuItem) {
+    @objc private func loadOnlyPackage(_ sender: NSMenuItem) {
         guard let group = sender.representedObject as? String else { return }
         selectGroupHandler(group)
     }
