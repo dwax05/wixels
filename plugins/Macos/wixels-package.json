@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "macos",
+  "wixelsKit": { "minInclusive": "0.1.6", "maxExclusive": "0.2.0" },
+  "libraries": [
+    { "file": "libThemeMacos.dylib", "themeID": "macos" },
+    { "file": "libWidgetClock.dylib", "kind": "clock" },
+    { "file": "libWidgetNowPlaying.dylib", "kind": "nowplaying" },
+    { "file": "libWidgetPoster.dylib", "kind": "poster" },
+    { "file": "libWidgetReminders.dylib", "kind": "reminders" },
+    { "file": "libWidgetStats.dylib", "kind": "stats" },
+    { "file": "libWidgetWeather.dylib", "kind": "weather" }
+  ]
+}

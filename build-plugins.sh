@@ -83,6 +83,7 @@ else
     while IFS= read -r manifest; do
         dir="$(dirname "$manifest")"
         name="$(basename "$dir")"
+        [ "$name" = "Support" ] && continue
         selected "$name" "$PLUGIN_SELECTION" || continue
         echo "==> building plugin: $SUITE/$name"
         swift build --package-path "$dir" -c "$CONFIG" --product "Widget$name"
@@ -94,6 +95,9 @@ else
         echo "==> building theme: $name"
         swift build --package-path "$THEME_ROOT" -c "$CONFIG" --product "Theme$name"
         for dylib in "$THEME_ROOT/.build/$CONFIG"/libTheme*.dylib; do install_dylib "$dylib" "$PLUGIN_DEST/$SUITE"; done
+    fi
+    if [ -f "$SUITE_ROOT/wixels-package.json" ]; then
+        /bin/cp -f "$SUITE_ROOT/wixels-package.json" "$PLUGIN_DEST/$SUITE/wixels-package.json"
     fi
 fi
 

@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "cynaberii",
+  "wixelsKit": { "minInclusive": "0.1.6", "maxExclusive": "0.2.0" },
+  "libraries": [
+    { "file": "libThemeCynaberii.dylib", "themeID": "cynaberii" },
+    { "file": "libWidgetCatPet.dylib", "kind": "pet" },
+    { "file": "libWidgetClock.dylib", "kind": "clock" },
+    { "file": "libWidgetDiskSnail.dylib", "kind": "disk-snail" },
+    { "file": "libWidgetFrog.dylib", "kind": "frog" },
+    { "file": "libWidgetNowPlaying.dylib", "kind": "nowplaying" },
+    { "file": "libWidgetOwl.dylib", "kind": "owl" },
+    { "file": "libWidgetPlant.dylib", "kind": "plant" },
+    { "file": "libWidgetPoster.dylib", "kind": "poster" },
+    { "file": "libWidgetQuotes.dylib", "kind": "quotes" },
+    { "file": "libWidgetStats.dylib", "kind": "stats" },
+    { "file": "libWidgetSysBox.dylib", "kind": "sys" },
+    { "file": "libWidgetWeather.dylib", "kind": "weather" }
+  ]
+}

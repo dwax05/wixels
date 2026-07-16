@@ -108,5 +108,8 @@ with the selected widget suite only; it includes no theme in a host-only package
 Build the theme with the same Swift toolchain as Wixels. Themes run in the host
 process and share WixelsKit types with it, so a broken theme can terminate Wixels.
 
-If a theme ID is unknown or malformed, Wixels falls back to `macos`. If no global
-theme is configured, `macos` is the default.
+Every distributable package needs a `wixels-package.json` beside its dylibs. It
+declares a schema version, its WixelsKit compatibility range, and every dylib it
+ships; Wixels validates it before loading code. Unknown theme IDs fall back to the
+loaded `macos` theme. If that required default is not loaded, themed widgets are not
+mounted and Wixels logs the missing package.

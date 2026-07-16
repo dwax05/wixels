@@ -24,6 +24,36 @@ struct PluginCatalog {
     var folders = Set<String>()
 }
 
+private struct ExtensionPackageManifest: Decodable {
+    struct Compatibility: Decodable { let minInclusive: String; let maxExclusive: String }
+    struct Library: Decodable { let file: String; let kind: String?; let themeID: String? }
+    let schemaVersion: Int
+    let id: String
+    let wixelsKit: Compatibility
+    let libraries: [Library]
+
+    func acceptsHost() -> Bool {
+        guard schemaVersion == 1,
+              let host = Version(WixelsKitAPI.version), let min = Version(wixelsKit.minInclusive),
+              let max = Version(wixelsKit.maxExclusive) else { return false }
+        return min <= host && host < max
+    }
+
+    func library(named name: String) -> Library? { libraries.first { $0.file == name } }
+}
+
+private struct Version: Comparable {
+    let major: Int; let minor: Int; let patch: Int
+    init?(_ string: String) {
+        let parts = string.split(separator: ".").compactMap { Int($0) }
+        guard parts.count == 3 else { return nil }
+        major = parts[0]; minor = parts[1]; patch = parts[2]
+    }
+    static func < (lhs: Version, rhs: Version) -> Bool {
+        (lhs.major, lhs.minor, lhs.patch) < (rhs.major, rhs.minor, rhs.patch)
+    }
+}
+
 enum PluginLoader {
     static let ungrouped = "Ungrouped"
 
@@ -42,6 +72,7 @@ enum PluginLoader {
                 .map(folder(for:)).filter { $0 != ungrouped }
         })
         let selectedFolder = requestedFolder ?? themedFolders.sorted().first
+        let manifests = compatibleManifests(in: dirs)
         // Reuse the first loaded implementation for copies of the same plugin
         // filename. Swift dylibs may contain Objective-C-visible classes, so dlopen
         // of a second copy can produce duplicate-class warnings or crashes.
@@ -52,6 +83,7 @@ enum PluginLoader {
                 guard !excluded.contains(path) else { continue }
                 let filename = (file as NSString).lastPathComponent
                 let group = folder(for: file)
+                guard manifestAllows(filename: filename, group: group, directory: dir, manifests: manifests) else { continue }
                 if group != ungrouped { catalog.folders.insert(group) }
                 guard belongsToSelectedFolder(file, selectedFolder: selectedFolder,
                                                themedFolders: themedFolders,
@@ -75,12 +107,60 @@ enum PluginLoader {
                     catalog.widgets.formUnion(kinds.map { PluginWidget(group: group, kind: $0) })
                 } else if filename.hasPrefix("libTheme"), group != ungrouped,
                           let id = themeID(from: filename) {
+                    if let declared = manifests[manifestKey(directory: dir, group: group)]?.library(named: filename)?.themeID,
+                       declared != id {
+                        Log.note("package manifest declares theme '\(declared)' for '\(filename)', but its filename resolves to '\(id)'")
+                        continue
+                    }
                     catalog.themeIDsByGroup[group] = id
                 }
             }
         }
         return catalog
     }
+
+    private static func compatibleManifests(in dirs: [String]) -> [String: ExtensionPackageManifest] {
+        var manifests: [String: ExtensionPackageManifest] = [:]
+        var warnedLegacy = Set<String>()
+        for dir in dirs {
+            for file in loadableFiles(in: dir) {
+                let group = folder(for: file)
+                guard group != ungrouped else {
+                    if warnedLegacy.insert("\(dir)/\(group)").inserted { Log.note("legacy loose extensions in '\(dir)' have no wixels-package.json; compatibility was not preflighted") }
+                    continue
+                }
+                let key = manifestKey(directory: dir, group: group)
+                guard manifests[key] == nil else { continue }
+                let path = key + "/wixels-package.json"
+                guard let data = FileManager.default.contents(atPath: path) else {
+                    if warnedLegacy.insert(key).inserted { Log.note("legacy package '\(group)' has no wixels-package.json; compatibility was not preflighted") }
+                    continue
+                }
+                guard let manifest = try? JSONDecoder().decode(ExtensionPackageManifest.self, from: data), manifest.acceptsHost() else {
+                    Log.note("package '\(group)' has an invalid or incompatible wixels-package.json for WixelsKit \(WixelsKitAPI.version)")
+                    continue
+                }
+                manifests[key] = manifest
+            }
+        }
+        return manifests
+    }
+
+    private static func manifestAllows(filename: String, group: String, directory: String,
+                                       manifests: [String: ExtensionPackageManifest]) -> Bool {
+        guard group != ungrouped else { return true }
+        let key = manifestKey(directory: directory, group: group)
+        let path = key + "/wixels-package.json"
+        guard FileManager.default.fileExists(atPath: path) else { return true }
+        guard let manifest = manifests[key] else { return false }
+        guard manifest.library(named: filename) != nil else {
+            Log.note("package '\(manifest.id)' does not declare '\(filename)' — skipping it")
+            return false
+        }
+        return true
+    }
+
+    private static func manifestKey(directory: String, group: String) -> String { directory + "/" + group }
 
     /// An explicit build/run selection limits widget dylibs to its matching package.
     /// With no selection, independent packages compose freely.
@@ -135,10 +215,14 @@ enum PluginLoader {
     // environment or depending on an app bundle on disk.
     static func searchDirs(bundleResourceURL: URL?, homeDirectory: URL,
                            developmentRoot: URL? = nil) -> [String] {
+        // An explicit root is a hermetic staging/test environment. Do not mix
+        // user-installed extensions into its validation result.
+        if let developmentRoot {
+            return [developmentRoot.appendingPathComponent("plugins").path,
+                    developmentRoot.appendingPathComponent("themes").path]
+        }
         var dirs: [URL] = []
-        if let root = developmentRoot {
-            dirs += [root.appendingPathComponent("plugins"), root.appendingPathComponent("themes")]
-        } else if let resources = bundleResourceURL {
+        if let resources = bundleResourceURL {
             dirs += [resources.appendingPathComponent("plugins"), resources.appendingPathComponent("themes")]
         }
         let user = homeDirectory.appendingPathComponent(".config/wixels")
