@@ -106,6 +106,12 @@ actor CommandVariableStore {
         return try result.get()
     }
 
+    /// Click actions use the same bounded, process-group-supervised launcher as
+    /// variables, so a config reload or app termination cannot orphan a shell.
+    nonisolated static func runAction(_ command: String) async throws {
+        _ = try await run(command)
+    }
+
     private nonisolated static func reap(_ process: Process, exited: AsyncStream<Void>) async {
         let pgid = process.processIdentifier
         if process.isRunning {
@@ -214,49 +220,84 @@ private enum CommandError: Error, CustomStringConvertible {
 }
 
 @MainActor
-final class CommandTextWidget: ObservableObject, MountableWidget, WidgetTicker {
+final class DeclarativeWidget: ObservableObject, MountableWidget, WidgetTicker {
     let kind: String
     let refresh: RefreshPolicy = .interval(1)
     let interactive = false
     var active = true
     var hasSample = false
-    private let template: String
-    private let style: WidgetStyle
+    private let definition: DeclarativeWidgetDefinition
     private let variables: CommandVariableStore
     private var contentUpdate: (() -> Void)?
-    @Published fileprivate var text: String
+    @Published fileprivate var values: [String: String] = [:]
 
-    init(definition: TextWidgetDefinition, variables: CommandVariableStore) {
-        kind = definition.id; template = definition.text; style = definition.style
-        self.variables = variables; text = definition.text
+    init(definition: DeclarativeWidgetDefinition, variables: CommandVariableStore) {
+        kind = definition.id; self.definition = definition; self.variables = variables
     }
 
     func setContentUpdateHandler(_ handler: @escaping () -> Void) { contentUpdate = handler }
     func makeTicker() -> any WidgetTicker { self }
     func makeView(_ palette: PaletteStore) -> AnyView {
-        AnyView(CommandTextView(model: self, palette: palette, style: style))
+        AnyView(DeclarativeWidgetView(model: self, palette: palette, definition: definition))
     }
 
     func tick() async {
-        let next = interpolate(template, values: await variables.snapshot())
-        if next != text { text = next; contentUpdate?() }
+        let next = await variables.snapshot()
+        if next != values { values = next; contentUpdate?() }
         hasSample = true
     }
 }
 
-private struct CommandTextView: View {
-    @ObservedObject var model: CommandTextWidget
+private struct DeclarativeWidgetView: View {
+    @ObservedObject var model: DeclarativeWidget
     @ObservedObject var palette: PaletteStore
-    let style: WidgetStyle
+    let definition: DeclarativeWidgetDefinition
 
-    // ColorRefs resolve against the observed palette inside body, so a pywal
-    // swap restyles chrome live without a config reload.
     var body: some View {
-        let p = palette.palette
+        if definition.visible.isVisible(in: model.values) {
+            DeclarativeNodeView(node: definition.root, values: model.values, palette: palette.palette)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(declarativeAccessibilityLabel(definition.root, values: model.values))
+        }
+    }
+}
+
+private struct DeclarativeNodeView: View {
+    let node: DeclarativeNode
+    let values: [String: String]
+    let palette: Palette
+
+    var body: some View { content }
+
+    private var content: AnyView {
+        switch node {
+        case let .text(value, style, visible, action):
+            return visible.isVisible(in: values)
+                ? AnyView(decorated(
+                    Text(value.resolve(in: values)).fixedSize(horizontal: false, vertical: true),
+                    style: style, action: action))
+                : AnyView(EmptyView())
+        case let .image(value, style, visible, action):
+            return visible.isVisible(in: values) ? AnyView(decorated(DeclarativeImage(source: value.resolve(in: values)), style: style, action: action)) : AnyView(EmptyView())
+        case let .row(children, spacing, style, visible):
+            return visible.isVisible(in: values) ? AnyView(decorated(HStack(spacing: spacing) { ForEach(Array(children.enumerated()), id: \.offset) { _, child in DeclarativeNodeView(node: child, values: values, palette: palette) } }, style: style, action: nil)) : AnyView(EmptyView())
+        case let .column(children, spacing, style, visible):
+            return visible.isVisible(in: values) ? AnyView(decorated(VStack(alignment: .leading, spacing: spacing) { ForEach(Array(children.enumerated()), id: \.offset) { _, child in DeclarativeNodeView(node: child, values: values, palette: palette) } }, style: style, action: nil)) : AnyView(EmptyView())
+        case let .stack(children, style, visible):
+            return visible.isVisible(in: values) ? AnyView(decorated(ZStack { ForEach(Array(children.enumerated()), id: \.offset) { _, child in DeclarativeNodeView(node: child, values: values, palette: palette) } }, style: style, action: nil)) : AnyView(EmptyView())
+        case let .spacer(length, visible):
+            guard visible.isVisible(in: values) else { return AnyView(EmptyView()) }
+            if let length { return AnyView(Spacer().frame(width: CGFloat(length), height: CGFloat(length))) }
+            return AnyView(Spacer())
+        }
+    }
+
+    private func decorated<Content: View>(_ content: Content, style: WidgetStyle, action: DeclarativeAction?) -> some View {
         let shape = RoundedRectangle(cornerRadius: style.radius, style: .continuous)
-        Text(model.text)
+        return content
             .font(style.font)
-            .foregroundStyle(style.foreground.color(in: p))
+            .foregroundStyle(style.foreground.color(in: palette))
             .lineSpacing(style.lineSpacing)
             .multilineTextAlignment(style.textAlignment.textAlignment)
             .frame(maxWidth: style.maxWidth, alignment: style.alignment.frameAlignment)
@@ -265,9 +306,9 @@ private struct CommandTextView: View {
             // Fill drawn after the clip (themedCard pattern) so its shadow — the
             // offset silhouette — isn't clipped away with the content.
             .background {
-                let fill = shape.fill(style.background.color(in: p).opacity(style.backgroundOpacity))
+                let fill = shape.fill(style.background.color(in: palette).opacity(style.backgroundOpacity))
                 if let shadow = style.shadow {
-                    fill.shadow(color: shadow.color.color(in: p).opacity(shadow.opacity),
+                    fill.shadow(color: shadow.color.color(in: palette).opacity(shadow.opacity),
                                 radius: shadow.blur, x: shadow.offsetX, y: shadow.offsetY)
                 } else {
                     fill
@@ -277,13 +318,13 @@ private struct CommandTextView: View {
                 // strokeBorder draws inside the bounds, so fit-content windows never clip it.
                 if let border = style.border {
                     RoundedRectangle(cornerRadius: style.radius, style: .continuous)
-                        .strokeBorder(border.color.color(in: p), lineWidth: border.width)
+                        .strokeBorder(border.color.color(in: palette), lineWidth: border.width)
                 }
             }
             .overlay {
                 if let inner = style.innerBorder {
                     RoundedRectangle(cornerRadius: max(0, style.radius - inner.inset), style: .continuous)
-                        .strokeBorder(inner.color.color(in: p), lineWidth: inner.width)
+                        .strokeBorder(inner.color.color(in: palette), lineWidth: inner.width)
                         .padding(inner.inset)
                 }
             }
@@ -293,18 +334,81 @@ private struct CommandTextView: View {
             .padding(.bottom, max(0, style.shadow?.offsetY ?? 0))
             .padding(.leading, max(0, -(style.shadow?.offsetX ?? 0)))
             .padding(.top, max(0, -(style.shadow?.offsetY ?? 0)))
+            .onTapGesture { if let action { DeclarativeCommand.run(action.command) } }
+    }
+}
+
+private struct DeclarativeImage: View {
+    let source: String
+    var body: some View {
+        if source.hasPrefix("https://"), let url = URL(string: source) {
+            DeclarativeRemoteImage(url: url)
+        } else if source.hasPrefix("/") || source.hasPrefix("file://") {
+            if let image = NSImage(contentsOf: URL(string: source) ?? URL(fileURLWithPath: source)) { Image(nsImage: image).resizable().scaledToFit() }
+            else { Image(systemName: "photo").foregroundStyle(.secondary) }
+        } else { Image(systemName: "photo").foregroundStyle(.secondary) }
+    }
+}
+
+@MainActor
+private final class DeclarativeImageCache: ObservableObject {
+    static let shared = DeclarativeImageCache()
+    private let cache = NSCache<NSURL, NSImage>()
+    private init() { cache.countLimit = 32 }
+
+    func image(for url: URL) -> NSImage? { cache.object(forKey: url as NSURL) }
+    func fetch(_ url: URL) async -> NSImage? {
+        if let cached = image(for: url) { return cached }
+        guard let (data, response) = try? await URLSession.shared.data(from: url),
+              let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode),
+              let image = NSImage(data: data) else { return nil }
+        cache.setObject(image, forKey: url as NSURL)
+        return image
+    }
+}
+
+private struct DeclarativeRemoteImage: View {
+    let url: URL
+    @State private var image: NSImage?
+    @State private var finished = false
+
+    var body: some View {
+        Group {
+            if let image { Image(nsImage: image).resizable().scaledToFit() }
+            else if finished { Image(systemName: "photo").foregroundStyle(.secondary) }
+            else { ProgressView() }
+        }
+        .task(id: url) {
+            image = await DeclarativeImageCache.shared.fetch(url)
+            finished = true
+        }
+    }
+}
+
+private enum DeclarativeCommand {
+    static func run(_ command: String) {
+        Task.detached(priority: .utility) { try? await CommandVariableStore.runAction(command) }
+    }
+}
+
+private func declarativeAccessibilityLabel(_ node: DeclarativeNode, values: [String: String]) -> String {
+    switch node {
+    case let .text(value, _, _, _): value.resolve(in: values)
+    case .image: "image"
+    case let .row(children, _, _, _), let .column(children, _, _, _), let .stack(children, _, _): children.map { declarativeAccessibilityLabel($0, values: values) }.joined(separator: " ")
+    case .spacer: ""
     }
 }
 
 @MainActor
 final class WidgetsSession {
     private let variables: CommandVariableStore
-    private let definitions: [TextWidgetDefinition]
+    private let definitions: [DeclarativeWidgetDefinition]
     init(_ config: LoadedWidgetsConfig) { variables = .init(definitions: config.variables); definitions = config.widgets }
     func mount(in host: WidgetHost) {
         Task { await variables.start() }
         for definition in definitions {
-            let widget = CommandTextWidget(definition: definition, variables: variables)
+            let widget = DeclarativeWidget(definition: definition, variables: variables)
             host.mount(widget, placement: definition.placement, defaultPlacement: definition.placement,
                        configIndex: -1, group: "ScriptWidgets", layoutID: definition.id)
         }

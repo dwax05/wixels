@@ -1,0 +1,21 @@
+[[variable]]
+name = "cyn-weather"
+command = "curl -fsS --max-time 8 'https://wttr.in/?format=%l%0A%C+%t%0Arain+%p++wind+%w' || printf '%s' 'weather unavailable'"
+interval = 900
+initial = "loading weather…"
+
+[[widget]]
+id = "cyn-weather"
+anchor = "bottomLeft"
+offset = [24, 320]
+size = [260, 140]
+sizing = "fixed"
+
+[widget.root]
+type = "column"
+style = "cyn-card"
+spacing = 8
+children = [
+  { type = "text", value = "WEATHER //", style = "cyn-title" },
+  { type = "text", value = "{cyn-weather}", style = "cyn-body" }
+]

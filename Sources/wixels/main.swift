@@ -59,7 +59,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusBar: StatusBarController!
     private var watcher: ConfigWatcher?
     private var layoutWatcher: ConfigWatcher?
-    private var widgetsWatcher: ConfigWatcher?
+    private var widgetsWatchers: [String: ConfigWatcher] = [:]
     private var widgetsSession: WidgetsSession?
     // A directory fd only reports entry create/rename/delete; in-place edits of an
     // existing layout file need their own file watcher per mounted group.
@@ -93,7 +93,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Watch the layout file and rebuild live when it changes (WIXELS_CONFIG honoured).
         self.watcher = ConfigWatcher(path: Config.path) { [weak self] in self?.reload() }
         self.layoutWatcher = ConfigWatcher(path: LayoutStore.directory) { [weak self] in self?.reload() }
-        self.widgetsWatcher = ConfigWatcher(path: WidgetsConfig.path) { [weak self] in self?.reload() }
+        rebuildWidgetsWatchers(paths: [WidgetsConfig.path])
         installSignalHandlers()
     }
 
@@ -179,7 +179,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         widgetsSession?.stop()
-        let widgetsSession = WidgetsSession(WidgetsConfig.load())
+        let declarativeConfig = WidgetsConfig.load()
+        rebuildWidgetsWatchers(paths: declarativeConfig.files)
+        let widgetsSession = WidgetsSession(declarativeConfig)
         widgetsSession.mount(in: host)
         self.widgetsSession = widgetsSession
         host.run()
@@ -200,6 +202,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             layoutFileWatchers[group] = ConfigWatcher(path: LayoutStore.path(for: group)) { [weak self] in
                 self?.reload()
             }
+        }
+    }
+
+    /// Declarative packages opt in through `include`; every resolved file gets
+    /// its own fd watcher so editing a package reloads the mounted runtime too.
+    private func rebuildWidgetsWatchers(paths: [String]) {
+        let wanted = Set(paths.isEmpty ? [WidgetsConfig.path] : paths)
+        for (path, watcher) in widgetsWatchers where !wanted.contains(path) {
+            watcher.stop(); widgetsWatchers[path] = nil
+        }
+        for path in wanted where widgetsWatchers[path] == nil {
+            widgetsWatchers[path] = ConfigWatcher(path: path) { [weak self] in self?.reload() }
         }
     }
 

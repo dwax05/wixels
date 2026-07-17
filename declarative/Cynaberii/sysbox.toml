@@ -1,0 +1,43 @@
+[[variable]]
+name = "cyn-host"
+command = "scutil --get ComputerName 2>/dev/null || hostname -s"
+interval = 3600
+initial = "MAC"
+
+[[variable]]
+name = "cyn-uptime"
+command = "uptime | sed -E 's/^.* up +([^,]+),.*$/\\1/'"
+interval = 60
+initial = "…"
+
+[[variable]]
+name = "cyn-disk"
+command = "df -H / | awk 'NR == 2 { print $5 }'"
+interval = 60
+initial = "…"
+
+[[variable]]
+name = "cyn-memory"
+command = "memory_pressure | awk -F: '/System-wide memory free percentage/ { gsub(/ /, \"\", $2); print $2 }'"
+interval = 30
+initial = "…"
+
+[[widget]]
+id = "cyn-sysbox"
+anchor = "bottomLeft"
+offset = [24, 170]
+size = [260, 110]
+sizing = "fixed"
+
+[widget.root]
+type = "column"
+style = "cyn-card"
+spacing = 7
+children = [
+  { type = "text", value = "SYS // {cyn-host}", style = "cyn-title" },
+  { type = "row", style = "cyn-body", spacing = 16, children = [
+    { type = "text", value = "disk {cyn-disk}", style = "cyn-body" },
+    { type = "text", value = "mem free {cyn-memory}", style = "cyn-body" }
+  ] },
+  { type = "text", value = "up {cyn-uptime}", style = "cyn-muted" }
+]

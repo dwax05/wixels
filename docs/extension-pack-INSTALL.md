@@ -27,7 +27,7 @@ Wixels and remove its `plugins/<Package>/` folder.
 
 ## Text widgets and timers
 
-Personal text widgets live in `~/.config/wixels/widgets.toml`, not in an extension
+Personal declarative widgets live in `~/.config/wixels/widgets.toml`, not in an extension
 pack. It can define timer-driven shell variables and widgets that interpolate them as
 `{name}`. Because this file runs commands through your shell, it is trusted local
 automation: do not install a `widgets.toml` from an untrusted source.

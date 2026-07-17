@@ -1,0 +1,70 @@
+# Optional widgets.toml starter: declarative counterparts to the native Clock and
+# Stats widgets. Native implementations remain available in desktop.toml.
+
+[style.card]
+padding = 12
+radius = 12
+bg = "background"
+bg-opacity = 0.92
+border = { width = 1, color = "color8" }
+
+[style.title]
+padding = 0
+bg-opacity = 0
+font = "mono"
+font-size = 18
+font-weight = "semibold"
+
+[style.metric]
+padding = 0
+bg-opacity = 0
+font = "mono"
+font-size = 13
+
+[[variable]]
+name = "clock-time"
+kind = "listen"
+command = "while :; do date '+%H:%M:%S'; sleep 1; done"
+
+[[variable]]
+name = "clock-date"
+command = "date '+%a, %b %-d'"
+interval = 60
+
+[[variable]]
+name = "stats-uptime"
+command = "uptime | sed 's/.*up *//'"
+interval = 30
+
+[[variable]]
+name = "stats-memory"
+command = "memory_pressure | awk -F: '/System-wide memory free percentage/ { gsub(/ /, \"\", $2); print $2 }'"
+interval = 30
+initial = "…"
+
+[[widget]]
+id = "declarative-clock"
+anchor = "bottomLeft"
+offset = [300, 90]
+[widget.root]
+type = "column"
+style = "card"
+spacing = 4
+children = [
+  { type = "text", value = "{clock-time}", style = "title" },
+  { type = "text", value = "{clock-date}", style = "metric" }
+]
+
+[[widget]]
+id = "declarative-stats"
+anchor = "bottomLeft"
+offset = [300, 180]
+[widget.root]
+type = "column"
+style = "card"
+spacing = 4
+children = [
+  { type = "text", value = "Stats", style = "title" },
+  { type = "text", value = "Memory free: {stats-memory}", style = "metric" },
+  { type = "text", value = "Up: {stats-uptime}", style = "metric" }
+]

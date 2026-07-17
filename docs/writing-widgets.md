@@ -164,12 +164,13 @@ stable cross-version ABI, and the plugin shares WixelsKit types with the host.
 Plugins run in Wixels' process. Treat a plugin like trusted local code: a crash or
 fatal error in a plugin can terminate Wixels.
 
-## Text widgets and timers
+## Declarative widgets and timers
 
 For personal automation, `~/.config/wixels/widgets.toml` defines named shell commands
-and simple native text widgets. This is intentionally Eww-like: a `[[variable]]`
-command runs immediately and then at `interval` seconds; `{name}` in a widget's text
-is replaced by that variable's latest trimmed output.
+and native declarative widgets. This is intentionally Eww-like: a `[[variable]]`
+command runs immediately and then at `interval` seconds; `{name}` in a text value is
+replaced by that variable's latest trimmed output. Existing `text = "…"` widgets remain
+supported as shorthand for a text root.
 
 ```toml
 [[variable]]
@@ -221,6 +222,64 @@ look), `padding`, `bg`, `bg-opacity`,
 current user, so do not copy untrusted configuration into it. Commands are time- and
 output-bounded, but they are not sandboxed and may have their own macOS privacy
 behavior. Use a Swift dylib widget for custom drawing or interaction.
+
+### Declarative node trees and packages
+
+Each `[[widget]]` can instead contain a `[widget.root]` node. Nodes are `text`,
+`image`, `row`, `column`, `stack`, or `spacer`; containers take `children = [{ ... }]`.
+`text` uses `value`; `image` uses a trusted absolute local `src` or an `https://` URL.
+`visible` accepts `true`, `false`, a variable name, or `name == value` / `name != value`.
+Any text or image node may use `on-click = "command"`; this runs with the same trusted
+`/bin/sh -lc` posture as variables.
+
+Widgets default to `sizing = "fit-content"`. Use `sizing = "fixed"` with an explicit
+`size = [width, height]` for stable panes whose command output changes after mounting.
+
+```toml
+include = ["packages/status.toml"] # paths are relative to this file
+
+[style.label]
+padding = 4
+font = "mono"
+fg = "color6"
+
+[[widget]]
+id = "declarative-clock"
+anchor = "bottomLeft"
+offset = [300, 90]
+[widget.root]
+type = "row"
+spacing = 8
+children = [
+  { type = "text", value = "{clock}", style = "label" },
+  { type = "image", src = "/Users/me/.config/wixels/icons/clock.png" }
+]
+```
+
+Included files are explicitly trusted package code. Wixels resolves paths relative to
+the including file, rejects include cycles and duplicate widget IDs, and watches every
+resolved file. Declarative widgets are intentionally best for read-only cards and
+simple status layouts. Keep pixel-art, animation, rich media, and advanced interactive
+widgets in native dylibs until the DSL grows matching primitives.
+
+[`docs/declarative-clock-stats.toml`](declarative-clock-stats.toml) is an optional
+starter containing declarative Clock and Stats counterparts with shared styles. The
+native `clock` and `stats` desktop widgets remain the default path.
+
+### Declarative Cynaberii package
+
+[`declarative/Cynaberii/widgets.toml`](../declarative/Cynaberii/widgets.toml)
+recreates the suite's simple, read-only lane with shared square cards, hard shadows,
+palette colors, and monospaced typography:
+
+- Quotes reads `~/.config/wixels/quotes.txt`, with a built-in fallback.
+- SysBox reports the host, uptime, root-disk usage, and free memory.
+- Weather reads a compact current-conditions summary from `wttr.in`.
+
+Clock, Stats, Plant, Pets, DiskSnail, Poster, Now Playing, Frog, and Owl remain native
+plugins because their identity depends on pixel rendering, animation, artwork, media,
+or richer interactions. A root [`declarative/widgets.toml`](../declarative/widgets.toml)
+shows the package include used for installation.
 
 ## Native suite conventions
 

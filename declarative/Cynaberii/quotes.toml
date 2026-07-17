@@ -1,0 +1,21 @@
+[[variable]]
+name = "cyn-quote"
+command = "if [ -s \"$HOME/.config/wixels/quotes.txt\" ]; then awk 'NF { lines[++n]=$0 } END { if (n) { srand(); print lines[1+int(rand()*n)] } }' \"$HOME/.config/wixels/quotes.txt\"; else printf '%s' 'Small tools, carefully made.'; fi"
+interval = 900
+initial = "Small tools, carefully made."
+
+[[widget]]
+id = "cyn-quotes"
+anchor = "bottomLeft"
+offset = [24, 24]
+size = [260, 110]
+sizing = "fixed"
+
+[widget.root]
+type = "column"
+style = "cyn-card"
+spacing = 8
+children = [
+  { type = "text", value = "QUOTE //", style = "cyn-title" },
+  { type = "text", value = "“{cyn-quote}”", style = "cyn-body" }
+]

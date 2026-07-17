@@ -1,0 +1,45 @@
+# Cynaberii's declarative lane. These widgets use text, commands, and ordinary
+# layout primitives; pixel art, animation, media, and advanced interactions stay
+# in the native plugin suite.
+include = [
+  "quotes.toml",
+  "sysbox.toml",
+  "weather.toml"
+]
+
+[style.cyn-card]
+radius = 0
+padding = 14
+bg = "background"
+bg-opacity = 0.96
+border = { width = 4, color = "color8" }
+shadow = { color = "color8", offset = [6, 6], opacity = 0.42, blur = 0 }
+max-width = 310
+
+[style.cyn-title]
+radius = 0
+padding = 0
+bg-opacity = 0
+fg = "color6"
+font = "mono"
+font-size = 14
+font-weight = "bold"
+line-spacing = 0
+
+[style.cyn-body]
+radius = 0
+padding = 0
+bg-opacity = 0
+fg = "foreground"
+font = "mono"
+font-size = 13
+line-spacing = 3
+
+[style.cyn-muted]
+radius = 0
+padding = 0
+bg-opacity = 0
+fg = "color8"
+font = "mono"
+font-size = 11
+line-spacing = 1

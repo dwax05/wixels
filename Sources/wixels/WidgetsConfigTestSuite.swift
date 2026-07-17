@@ -65,7 +65,8 @@ func runWidgetsConfigTestSuite() -> Int32 {
                                 "widgets.toml parses poll variables and text widget placement, skips unknown kinds")
         try widgetsConfigExpect(config.variables[1].kind == .listen,
                                 "kind = \"listen\" parses without an interval")
-        try widgetsConfigExpect(interpolate(config.widgets[0].text, values: ["quote": "hello"]) == "lorem hello ipsum" &&
+        try widgetsConfigExpect(declarativeText(config.widgets[0].root) == "lorem {quote} ipsum" &&
+                                interpolate("{quote}", values: ["quote": "hello"]) == "hello" &&
                                 interpolate("{missing}", values: [:]) == "{missing}",
                                 "text widgets interpolate known variables and retain unknown placeholders")
 
@@ -106,6 +107,53 @@ func runWidgetsConfigTestSuite() -> Int32 {
         try widgetsConfigExpect(ColorRef.accent(4).rgb(in: palette) == palette.c(4) &&
                                 ColorRef.background.rgb(in: palette) == palette.background,
                                 "ColorRef resolves against a palette")
+
+        let tree = try WidgetsConfig.parse("""
+        [style.compact]
+        padding = 2
+        fg = "color2"
+
+        [[widget]]
+        id = "tree"
+        visible = "online == yes"
+        [widget.root]
+        type = "column"
+        spacing = 4
+        children = [
+          { type = "text", value = "hello {name}", style = "compact" },
+          { type = "row", children = [{ type = "image", src = "/tmp/icon.png" }, { type = "spacer", length = 8 }] }
+        ]
+        """)
+        try widgetsConfigExpect(tree.widgets.count == 1 && tree.widgets[0].visible.isVisible(in: ["online": "yes"]) &&
+                                !tree.widgets[0].visible.isVisible(in: ["online": "no"]) &&
+                                declarativeText(firstChild(tree.widgets[0].root)!) == "hello {name}",
+                                "declarative node trees, style references, and visibility bindings parse")
+
+        let temporary = "/private/tmp/wixels-widgets-config-suite-\(UUID().uuidString)"
+        try FileManager.default.createDirectory(atPath: temporary, withIntermediateDirectories: true)
+        let package = "\(temporary)/package.toml", root = "\(temporary)/widgets.toml"
+        try "[[widget]]\nid = \"included\"\n[widget.root]\ntype = \"text\"\nvalue = \"from package\"\nstyle = \"shared\"\n".write(toFile: package, atomically: true, encoding: .utf8)
+        try "include = [\"package.toml\"]\n[style.shared]\npadding = 7\n[[widget]]\nid = \"root\"\ntext = \"from root\"\n".write(toFile: root, atomically: true, encoding: .utf8)
+        let included = try WidgetsConfig.load(path: root)
+        let expectedFiles = Set([root, package].map { URL(fileURLWithPath: $0).standardizedFileURL.path })
+        try widgetsConfigExpect(included.widgets.map(\.id) == ["root", "included"] &&
+                                nodeStyle(included.widgets[1].root)?.padding == 7 &&
+                                Set(included.files) == expectedFiles,
+                                "includes resolve relative paths, inherit presets, and report every watched file")
+        let duplicateRejected: Bool
+        do { _ = try WidgetsConfig.parse("[[widget]]\nid = \"same\"\ntext = \"a\"\n[[widget]]\nid = \"same\"\ntext = \"b\""); duplicateRejected = false } catch { duplicateRejected = true }
+        try "include = [\"widgets.toml\"]\n".write(toFile: package, atomically: true, encoding: .utf8)
+        let cycleRejected: Bool
+        do { _ = try WidgetsConfig.load(path: root); cycleRejected = false } catch { cycleRejected = true }
+        try widgetsConfigExpect(duplicateRejected && cycleRejected,
+                                "duplicate widget IDs and include cycles are rejected")
+
+        let cynaberii = try WidgetsConfig.load(path: "declarative/Cynaberii/widgets.toml")
+        try widgetsConfigExpect(cynaberii.widgets.map(\.id) == ["cyn-quotes", "cyn-sysbox", "cyn-weather"] &&
+                                cynaberii.files.count == 4 &&
+                                cynaberii.widgets.allSatisfy({ isFixed($0.placement) }) &&
+                                nodeStyle(cynaberii.widgets[0].root)?.radius == 0,
+                                "declarative Cynaberii package loads stable fixed cards and shared styles")
         print("PASS widgets config suite")
         return 0
     } catch {
@@ -117,6 +165,31 @@ func runWidgetsConfigTestSuite() -> Int32 {
 private func widgetsConfigExpect(_ condition: @autoclosure () -> Bool, _ message: String) throws {
     guard condition() else { throw WidgetsConfigTestFailure(message) }
     print("PASS \(message)")
+}
+
+private func declarativeText(_ node: DeclarativeNode) -> String? {
+    if case let .text(value, _, _, _) = node { return value.source }
+    return nil
+}
+
+private func firstChild(_ node: DeclarativeNode) -> DeclarativeNode? {
+    if case let .column(children, _, _, _) = node { return children.first }
+    return nil
+}
+
+private func nodeStyle(_ node: DeclarativeNode) -> WidgetStyle? {
+    switch node {
+    case let .text(_, style, _, _), let .image(_, style, _, _),
+         let .row(_, _, style, _), let .column(_, _, style, _), let .stack(_, style, _):
+        style
+    case .spacer:
+        nil
+    }
+}
+
+private func isFixed(_ placement: Placement) -> Bool {
+    if case .fixed = placement.sizing { return true }
+    return false
 }
 
 private struct WidgetsConfigTestFailure: Error, CustomStringConvertible {
