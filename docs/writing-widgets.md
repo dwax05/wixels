@@ -164,6 +164,64 @@ stable cross-version ABI, and the plugin shares WixelsKit types with the host.
 Plugins run in Wixels' process. Treat a plugin like trusted local code: a crash or
 fatal error in a plugin can terminate Wixels.
 
+## Text widgets and timers
+
+For personal automation, `~/.config/wixels/widgets.toml` defines named shell commands
+and simple native text widgets. This is intentionally Eww-like: a `[[variable]]`
+command runs immediately and then at `interval` seconds; `{name}` in a widget's text
+is replaced by that variable's latest trimmed output.
+
+```toml
+[[variable]]
+name = "quote"
+command = "~/.config/wixels/scripts/random-quote.sh"
+interval = 60
+initial = "…"
+
+[[variable]]
+name = "clock"
+kind = "listen"     # long-lived process; each stdout line becomes the value
+command = "while :; do date '+%H:%M:%S'; sleep 1; done"
+
+[style.card]
+radius = 12
+border = { width = 2, color = "color4" }
+inner-border = { width = 1, color = "color6", inset = 3 }
+shadow = { color = "color3", offset = [4, 4], opacity = 0.3 }
+padding = 14
+bg = "background"
+bg-opacity = 0.92
+
+[[widget]]
+id = "lorem"
+text = "lorem {quote} ipsum"
+style = "card"
+radius = 0          # style keys on the widget row override the preset
+anchor = "bottomLeft"
+offset = [300, 90]
+size = [250, 110]
+```
+
+Variables default to `kind = "poll"` (run every `interval` seconds). `kind =
+"listen"` keeps one process alive and takes each stdout line as the new value,
+restarting with backoff if it exits.
+
+Styling comes from optional `[style.<name>]` presets referenced with `style =
+"<name>"`; any style key may also sit directly on the widget row to override the
+preset. Keys: `radius`, `border` / `inner-border` (`{ width, color, inset }` —
+`inset` is the inner border's concentric gap), `shadow` (`{ color, offset = [x, y],
+opacity, blur }` — blur 0 gives the hard offset silhouette of the classic card
+look), `padding`, `bg`, `bg-opacity`,
+`max-width`, `align`, `fg`, `font-size`, `font-weight`, `font` (`"system"`,
+`"mono"`, or a font name), `line-spacing`, `text-align`. Colors are
+`"background"`, `"foreground"`, `"color0"`–`"color15"` (pywal slots), or
+`"#rrggbb"`, and re-resolve live when the palette changes.
+
+`widgets.toml` is trusted local automation. Commands run through `/bin/sh -lc` as the
+current user, so do not copy untrusted configuration into it. Commands are time- and
+output-bounded, but they are not sandboxed and may have their own macOS privacy
+behavior. Use a Swift dylib widget for custom drawing or interaction.
+
 ## Native suite conventions
 
 The first-party `Macos` suite keeps one package per widget beneath

@@ -59,6 +59,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusBar: StatusBarController!
     private var watcher: ConfigWatcher?
     private var layoutWatcher: ConfigWatcher?
+    private var widgetsWatcher: ConfigWatcher?
+    private var widgetsSession: WidgetsSession?
     // A directory fd only reports entry create/rename/delete; in-place edits of an
     // existing layout file need their own file watcher per mounted group.
     private var layoutFileWatchers: [String: ConfigWatcher] = [:]
@@ -91,6 +93,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Watch the layout file and rebuild live when it changes (WIXELS_CONFIG honoured).
         self.watcher = ConfigWatcher(path: Config.path) { [weak self] in self?.reload() }
         self.layoutWatcher = ConfigWatcher(path: LayoutStore.directory) { [weak self] in self?.reload() }
+        self.widgetsWatcher = ConfigWatcher(path: WidgetsConfig.path) { [weak self] in self?.reload() }
+        installSignalHandlers()
+    }
+
+    // Listen variables own long-lived child process groups; a plain SIGTERM/SIGINT
+    // would orphan them. Route both through NSApp.terminate so
+    // applicationWillTerminate kills the registered groups. Plain Dispatch
+    // closures only — no Swift Concurrency inside DispatchSource handlers.
+    private var signalSources: [DispatchSourceSignal] = []
+    private func installSignalHandlers() {
+        for sig in [SIGTERM, SIGINT] {
+            signal(sig, SIG_IGN)
+            let source = DispatchSource.makeSignalSource(signal: sig, queue: .main)
+            source.setEventHandler { NSApp.terminate(nil) }
+            source.resume()
+            signalSources.append(source)
+        }
+    }
+
+    func applicationWillTerminate(_ note: Notification) {
+        ProcessGroupRegistry.shared.killAll()
     }
 
     /// Construct a host from the current config and mount every widget. Reads `[colors]`
@@ -155,6 +178,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 Log.note("no widget for kind '\(entry.kind)'")
             }
         }
+        widgetsSession?.stop()
+        let widgetsSession = WidgetsSession(WidgetsConfig.load())
+        widgetsSession.mount(in: host)
+        self.widgetsSession = widgetsSession
         host.run()
         self.host = host
         rebuildLayoutFileWatchers(
@@ -258,6 +285,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         Log.note("config changed — reloading")
         host.shutdown()
+        widgetsSession?.stop()
+        widgetsSession = nil
         buildSession()
         statusBar.rebind(host: self.host)
     }
@@ -273,6 +302,8 @@ if CommandLine.arguments.contains("--config-tests") {
     exit(PluginLoader.runTestSuite())
 } else if CommandLine.arguments.contains("--plugin-path-tests") {
     exit(runPluginLoaderPathTestSuite())
+} else if CommandLine.arguments.contains("--widgets-config-tests") {
+    exit(runWidgetsConfigTestSuite())
 } else {
     let app = NSApplication.shared
     app.setActivationPolicy(.accessory)      // no dock icon, single process
