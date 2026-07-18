@@ -129,6 +129,69 @@ func runWidgetsConfigTestSuite() -> Int32 {
                                 declarativeText(firstChild(tree.widgets[0].root)!) == "hello {name}",
                                 "declarative node trees, style references, and visibility bindings parse")
 
+        let clickable = try WidgetsConfig.parse("""
+        [[widget]]
+        id = "clickable"
+        [widget.root]
+        type = "text"
+        value = "click me"
+        on-click = "open https://example.com"
+        """)
+        try widgetsConfigExpect(clickable.widgets[0].root.containsAction,
+                                "on-click actions mark the node tree as containing an action")
+
+        let inert = try WidgetsConfig.parse("""
+        [[widget]]
+        id = "inert"
+        [widget.root]
+        type = "row"
+        children = [{ type = "text", value = "no click" }]
+        """)
+        try widgetsConfigExpect(!inert.widgets[0].root.containsAction,
+                                "widgets without on-click report no action")
+
+        let clickableCard = try WidgetsConfig.parse("""
+        [[widget]]
+        id = "clickable-card"
+        [widget.root]
+        type = "column"
+        on-click = "true"
+        children = [{ type = "text", value = "card" }]
+        """)
+        try widgetsConfigExpect(clickableCard.widgets[0].root.containsAction,
+                                "on-click on a container node marks the whole card clickable")
+
+        let listenWithInterval = try WidgetsConfig.parse("""
+        [[variable]]
+        name = "ignored-interval"
+        kind = "listen"
+        command = "tail -f /tmp/y"
+        interval = 15
+        """)
+        try widgetsConfigExpect(listenWithInterval.variables.count == 1 &&
+                                listenWithInterval.variables[0].kind == .listen,
+                                "listen variables parse even when an interval key is present (interval is ignored)")
+
+        let tableStyle = try WidgetsConfig.parse("""
+        [[widget]]
+        id = "table-style"
+        text = "x"
+        style = { radius = 12 }
+        """)
+        try widgetsConfigExpect(tableStyle.widgets[0].style == .default,
+                                "table-valued style is ignored, falling back to defaults")
+
+        let ignoredWidgetOnClick = try WidgetsConfig.parse("""
+        [[widget]]
+        id = "widget-level-click"
+        on-click = "open https://example.com"
+        [widget.root]
+        type = "text"
+        value = "no click here"
+        """)
+        try widgetsConfigExpect(!ignoredWidgetOnClick.widgets[0].root.containsAction,
+                                "widget-level on-click is ignored for node-tree widgets; only node-level on-click counts")
+
         let temporary = "/private/tmp/wixels-widgets-config-suite-\(UUID().uuidString)"
         try FileManager.default.createDirectory(atPath: temporary, withIntermediateDirectories: true)
         let package = "\(temporary)/package.toml", root = "\(temporary)/widgets.toml"
@@ -173,14 +236,14 @@ private func declarativeText(_ node: DeclarativeNode) -> String? {
 }
 
 private func firstChild(_ node: DeclarativeNode) -> DeclarativeNode? {
-    if case let .column(children, _, _, _) = node { return children.first }
+    if case let .column(children, _, _, _, _) = node { return children.first }
     return nil
 }
 
 private func nodeStyle(_ node: DeclarativeNode) -> WidgetStyle? {
     switch node {
     case let .text(_, style, _, _), let .image(_, style, _, _),
-         let .row(_, _, style, _), let .column(_, _, style, _), let .stack(_, style, _):
+         let .row(_, _, style, _, _), let .column(_, _, style, _, _), let .stack(_, style, _, _):
         style
     case .spacer:
         nil

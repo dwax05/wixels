@@ -3,6 +3,16 @@ import SwiftUI
 import TOMLKit
 import WixelsKit
 
+extension TOMLValueConvertible {
+    /// Coerce a TOML value that may be written as an int or a double literal.
+    var asDouble: Double? { double ?? int.map(Double.init) }
+}
+
+extension TOMLTable {
+    /// `self[key]`, coerced whether the TOML author wrote an int or a double.
+    func number(_ key: String) -> Double? { self[key]?.asDouble }
+}
+
 enum VariableKind: Equatable, Sendable { case poll(interval: TimeInterval), listen }
 
 struct VariableDefinition: Sendable {
@@ -25,13 +35,20 @@ struct DeclarativeWidgetDefinition: Sendable {
 indirect enum DeclarativeNode: Sendable {
     case text(ValueBinding, style: WidgetStyle, visible: ValueBinding, action: DeclarativeAction?)
     case image(ValueBinding, style: WidgetStyle, visible: ValueBinding, action: DeclarativeAction?)
-    case row([DeclarativeNode], spacing: Double, style: WidgetStyle, visible: ValueBinding)
-    case column([DeclarativeNode], spacing: Double, style: WidgetStyle, visible: ValueBinding)
-    case stack([DeclarativeNode], style: WidgetStyle, visible: ValueBinding)
+    case row([DeclarativeNode], spacing: Double, style: WidgetStyle, visible: ValueBinding, action: DeclarativeAction?)
+    case column([DeclarativeNode], spacing: Double, style: WidgetStyle, visible: ValueBinding, action: DeclarativeAction?)
+    case stack([DeclarativeNode], style: WidgetStyle, visible: ValueBinding, action: DeclarativeAction?)
     case spacer(length: Double?, visible: ValueBinding)
+
+    var containsAction: Bool {
+        switch self {
+        case .text(_, _, _, let action), .image(_, _, _, let action): return action != nil
+        case .row(let children, _, _, _, let action), .column(let children, _, _, _, let action), .stack(let children, _, _, let action): return action != nil || children.contains { $0.containsAction }
+        case .spacer: return false
+        }
+    }
 }
 
-struct DeclarativeStyle: Sendable { let value: WidgetStyle }
 struct DeclarativeAction: Sendable { let command: String }
 
 /// Literal strings interpolate `{variable}`. Visibility additionally accepts
@@ -67,7 +84,7 @@ struct LoadedWidgetsConfig {
     var variables: [VariableDefinition] = []
     var widgets: [DeclarativeWidgetDefinition] = []
     var files: [String] = []
-    var styles: [String: DeclarativeStyle] = [:]
+    var styles: [String: WidgetStyle] = [:]
 }
 
 enum WidgetsConfig {
@@ -112,10 +129,12 @@ enum WidgetsConfig {
             let kind: VariableKind
             switch row["kind"]?.string ?? "poll" {
             case "poll":
-                let interval = row["interval"]?.double ?? row["interval"]?.int.map(Double.init) ?? 60
+                let interval = row.number("interval") ?? 60
                 guard interval.isFinite, interval >= 1 else { Log.note("invalid widgets.toml interval for '\(name)' — skipping"); continue }
                 kind = .poll(interval: interval)
-            case "listen": kind = .listen
+            case "listen":
+                kind = .listen
+                if row["interval"] != nil { Log.note("widgets.toml interval is ignored for listen variable '\(name)'") }
             default: Log.note("unknown widgets.toml variable kind for '\(name)' — skipping"); continue
             }
             result.variables.append(.init(name: name, command: raw, kind: kind, initial: row["initial"]?.string ?? ""))
@@ -123,7 +142,7 @@ enum WidgetsConfig {
         var presets = result.styles
         if let styles = table["style"]?.table {
             for name in styles.keys where ThemeManifest.isValidID(name) {
-                if let row = styles[name]?.table { presets[name] = .init(value: .default.applying(WidgetStylePatch.parse(from: row, context: "style.\(name)"))) }
+                if let row = styles[name]?.table { presets[name] = .default.applying(WidgetStylePatch.parse(from: row, context: "style.\(name)")) }
             }
         }
         result.styles = presets
@@ -139,20 +158,23 @@ enum WidgetsConfig {
                 default: Log.note("unknown widgets.toml sizing '\(sizing)' for widget '\(id)' — using fit-content")
                 }
             }
-            let visible = binding(row["visible"], visibility: true, context: id)
+            let visible = binding(row["visible"], context: id)
             let root: DeclarativeNode
             if let legacy = row["text"]?.string { root = .text(.init(source: legacy, visibility: false), style: style, visible: .always, action: action(row)) }
-            else if let rootRow = row["root"]?.table { root = try node(rootRow, presets: presets, inheritedStyle: style, context: "widget.\(id).root") }
+            else if let rootRow = row["root"]?.table {
+                if row["on-click"] != nil { Log.note("widgets.toml widget-level on-click is ignored for widget '\(id)' — put it on a node inside [widget.root]") }
+                root = try node(rootRow, presets: presets, inheritedStyle: style, context: "widget.\(id).root")
+            }
             else { throw ConfigError.malformedNode("widget '\(id)' requires text or [widget.root]") }
             result.widgets.append(.init(id: id, placement: placement, style: style, visible: visible, root: root))
         }
         return result
     }
 
-    private static func node(_ row: TOMLTable, presets: [String: DeclarativeStyle], inheritedStyle: WidgetStyle, context: String) throws -> DeclarativeNode {
+    private static func node(_ row: TOMLTable, presets: [String: WidgetStyle], inheritedStyle: WidgetStyle, context: String) throws -> DeclarativeNode {
         guard let type = row["type"]?.string else { throw ConfigError.malformedNode("\(context): missing type") }
         let style = resolveStyle(row, presets: presets, base: inheritedStyle, context: context)
-        let visible = binding(row["visible"], visibility: true, context: context)
+        let visible = binding(row["visible"], context: context)
         let action = action(row)
         let children = try (row["children"]?.array ?? []).enumerated().map { index, value -> DeclarativeNode in
             guard let child = value.table else { throw ConfigError.malformedNode("\(context).children[\(index)]") }
@@ -161,9 +183,9 @@ enum WidgetsConfig {
         switch type {
         case "text": guard let value = row["value"]?.string ?? row["text"]?.string else { throw ConfigError.malformedNode("\(context): text requires value") }; return .text(.init(source: value, visibility: false), style: style, visible: visible, action: action)
         case "image": guard let value = row["value"]?.string ?? row["src"]?.string else { throw ConfigError.malformedNode("\(context): image requires src") }; return .image(.init(source: value, visibility: false), style: style, visible: visible, action: action)
-        case "row": return .row(children, spacing: spacing(row), style: style, visible: visible)
-        case "column": return .column(children, spacing: spacing(row), style: style, visible: visible)
-        case "stack": return .stack(children, style: style, visible: visible)
+        case "row": return .row(children, spacing: spacing(row), style: style, visible: visible, action: action)
+        case "column": return .column(children, spacing: spacing(row), style: style, visible: visible, action: action)
+        case "stack": return .stack(children, style: style, visible: visible, action: action)
         case "spacer": return .spacer(length: row["length"].flatMap(PlacementTOML.number).map(Double.init), visible: visible)
         default: throw ConfigError.malformedNode("\(context): unknown type '\(type)'")
         }
@@ -171,10 +193,11 @@ enum WidgetsConfig {
 
     private static func spacing(_ row: TOMLTable) -> Double { max(0, row["spacing"].flatMap(PlacementTOML.number).map(Double.init) ?? 0) }
     private static func action(_ row: TOMLTable) -> DeclarativeAction? { row["on-click"]?.string.flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : .init(command: $0) } }
-    private static func binding(_ raw: TOMLValueConvertible?, visibility: Bool, context: String) -> ValueBinding { .init(source: raw?.string ?? (visibility ? "true" : ""), visibility: visibility) }
-    private static func resolveStyle(_ row: TOMLTable, presets: [String: DeclarativeStyle], base: WidgetStyle = .default, context: String) -> WidgetStyle {
+    private static func binding(_ raw: TOMLValueConvertible?, context: String) -> ValueBinding { .init(source: raw?.string ?? "true", visibility: true) }
+    private static func resolveStyle(_ row: TOMLTable, presets: [String: WidgetStyle], base: WidgetStyle = .default, context: String) -> WidgetStyle {
         var style = base
-        if let name = row["style"]?.string { if let preset = presets[name] { style = preset.value } else { Log.note("unknown widgets.toml style '\(name)' for \(context)") } }
+        if let name = row["style"]?.string { if let preset = presets[name] { style = preset } else { Log.note("unknown widgets.toml style '\(name)' for \(context)") } }
+        else if row["style"]?.table != nil { Log.note("widgets.toml style for \(context) must be a preset name, not a table — use style = \"preset-name\" plus top-level override keys") }
         return style.applying(WidgetStylePatch.parse(from: row, context: context))
     }
 

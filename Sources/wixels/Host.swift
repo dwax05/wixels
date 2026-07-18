@@ -60,6 +60,12 @@ final class InteractivePanel: NSPanel {
 
 /// A widget erased to what the host needs: a ticker (refresh its data), placement,
 /// size, and a factory for its self-updating SwiftUI view.
+extension WidgetHost {
+    /// `configIndex` for mounts not backed by a desktop.toml [[widget]] block (e.g.
+    /// widgets.toml declarative widgets) — excluded from config write-back.
+    static let unmanagedConfigIndex = -1
+}
+
 private struct Mount {
     let ticker: any WidgetTicker
     var anchor: WixelsKit.Anchor

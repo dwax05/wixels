@@ -142,9 +142,8 @@ struct WidgetStylePatch: Sendable {
         var p = WidgetStylePatch()
         func bad(_ key: String) { Log.note("invalid widgets.toml '\(key)' in \(context) — ignoring") }
         func number(_ key: String, _ valid: (Double) -> Bool = { _ in true }) -> Double? {
-            guard let raw = row[key] else { return nil }
-            guard let v = raw.double ?? raw.int.map(Double.init), v.isFinite, valid(v)
-            else { bad(key); return nil }
+            guard row[key] != nil else { return nil }
+            guard let v = row.number(key), v.isFinite, valid(v) else { bad(key); return nil }
             return v
         }
         func colorRef(_ key: String) -> ColorRef? {
@@ -198,13 +197,12 @@ struct WidgetStylePatch: Sendable {
         var x = 4.0, y = 4.0
         if let rawOffset = t["offset"] {
             guard let pair = rawOffset.array, pair.count == 2,
-                  let px = pair[0].double ?? pair[0].int.map(Double.init),
-                  let py = pair[1].double ?? pair[1].int.map(Double.init),
+                  let px = pair[0].asDouble, let py = pair[1].asDouble,
                   px.isFinite, py.isFinite else { return nil }
             x = px; y = py
         }
-        let opacity = t["opacity"]?.double ?? t["opacity"]?.int.map(Double.init) ?? 0.3
-        let blur = t["blur"]?.double ?? t["blur"]?.int.map(Double.init) ?? 0
+        let opacity = t.number("opacity") ?? 0.3
+        let blur = t.number("blur") ?? 0
         guard (0...1).contains(opacity), blur.isFinite, blur >= 0 else { return nil }
         var color: ColorRef = .foreground
         if let rawColor = t["color"] {
@@ -217,8 +215,8 @@ struct WidgetStylePatch: Sendable {
     // { width = 2, color = "color4", inset = 3 } — width defaults 1, color foreground, inset 3.
     private static func borderParts(_ raw: TOMLValueConvertible) -> (width: Double, color: ColorRef, inset: Double)? {
         guard let t = raw.table else { return nil }
-        let width = t["width"]?.double ?? t["width"]?.int.map(Double.init) ?? 1
-        let inset = t["inset"]?.double ?? t["inset"]?.int.map(Double.init) ?? 3
+        let width = t.number("width") ?? 1
+        let inset = t.number("inset") ?? 3
         guard width.isFinite, width >= 0, inset.isFinite, inset >= 0 else { return nil }
         var color: ColorRef = .foreground
         if let rawColor = t["color"] {
